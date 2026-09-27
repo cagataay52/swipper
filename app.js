@@ -1,680 +1,582 @@
+/* Swipper — Firebase-backed social feed */
 const firebaseConfig = {
-    apiKey: "AIzaSyCTbvB4-LBG-jP8zNkJhLNEaQfQpTAdEjA",
-    authDomain: "swipper-2f2a4.firebaseapp.com",
-    projectId: "swipper-2f2a4",
-    storageBucket: "swipper-2f2a4.firebasestorage.app",
-    messagingSenderId: "1025977111228",
-    appId: "1:1025977111228:web:f2b0013a21c5f2b434b6b9"
+  apiKey: "AIzaSyCTbvB4-LBG-jP8zNkJhLNEaQfQpTAdEjA",
+  authDomain: "swipper-2f2a4.firebaseapp.com",
+  projectId: "swipper-2f2a4",
+  storageBucket: "swipper-2f2a4.firebasestorage.app",
+  messagingSenderId: "1025977111228",
+  appId: "1:1025977111228:web:f2b0013a21c5f2b434b6b9"
 };
 
-if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
-
-// ÇİFT TIKLAMA YAKINLAŞTIRMA (ZOOM) KESİN ENGELLEYİCİ (JAVASCRIPT)
-let lastTouchEnd = 0;
-document.addEventListener('touchend', function (event) {
-    let now = (new Date()).getTime();
-    if (now - lastTouchEnd <= 300) { event.preventDefault(); }
-    lastTouchEnd = now;
-}, { passive: false });
+const fieldValue = firebase.firestore.FieldValue;
 
 document.addEventListener("DOMContentLoaded", () => {
-    
-    const authScreen = document.getElementById('auth-screen');
-    const appContainer = document.getElementById('app-container');
-    const splashScreen = document.getElementById('splash-screen');
-    const authError = document.getElementById('auth-error');
-    
-    let currentUser = null;
-    let usersCache = {}; 
-    let postsCache = {}; 
-    let pendingUploadFile = null;
-    let pendingUploadType = 'post'; 
-    let activeChatUserId = null;
-    let activeChatId = null; 
-    let activeCommentPostId = null;
-    let storyTimer = null;
-    let currentSharePostId = null; 
-    let currentEditPostId = null;  
-    let currentEditPostCaption = "";
-    let activeStoryAuthorId = null;
+  const $ = (id) => document.getElementById(id);
+  const state = {
+    user: null,
+    users: {},
+    posts: [],
+    stories: [],
+    feed: "all",
+    activeCommentPostId: null,
+    activeChatUserId: null,
+    selectedMedia: null,
+    selectedStory: null,
+    sharePostId: null,
+    chatUnsubscribe: null,
+    commentUnsubscribe: null,
+    unsubscribers: [],
+    postListenerStarted: false
+  };
 
-    function getChatRoomId(uid1, uid2) { return uid1 < uid2 ? uid1 + '_' + uid2 : uid2 + '_' + uid1; }
+  const escapeHTML = (value = "") => String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 
-    // --- YENİ SUNUCU MOTORU: KOTA YEMEYEN CORS PROXY + CATBOX MİMARİSİ ---
-    async function uploadToFreeCloud(file) {
-        // Yapay 3 saniyelik bekleme (Profesyonel hissiyat için uzatıldı)
-        await new Promise(r => setTimeout(r, 3000));
+  const cleanHandle = (value = "") => String(value).trim().replace(/^@/, "").replace(/[^a-zA-Z0-9_]/g, "").toLowerCase();
+  const initials = (value = "S") => value.trim().slice(0, 1).toUpperCase() || "S";
+  const avatarFor = (profile = {}) => {
+    const candidate = String(profile.avatar || "");
+    if (/^https?:\/\//i.test(candidate)) return candidate;
+    return `https://api.dicebear.com/9.x/initials/svg?backgroundColor=eceaff&fontFamily=Arial&seed=${encodeURIComponent(profile.username || profile.name || "swipper")}`;
+  };
+  const safeMediaURL = (value) => /^https?:\/\//i.test(String(value || "")) ? String(value) : "";
+  const dateFrom = (value) => value && typeof value.toDate === "function" ? value.toDate() : null;
+  const formatDate = (value) => {
+    const date = dateFrom(value);
+    if (!date) return "şimdi";
+    const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+    if (seconds < 60) return "şimdi";
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} dk`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} sa`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)} g`;
+    return date.toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
+  };
+  const chatIdFor = (first, second) => [first, second].sort().join("_");
+  const currentProfile = () => state.users[state.user?.uid] || {};
+  const postText = (post) => String(post.text ?? post.caption ?? "");
+  const postMedia = (post) => safeMediaURL(post.mediaUrl || post.imageUrl || post.videoUrl);
+  const isVideo = (post) => post.mediaType === "video" || /\.(mp4|webm|mov)(?:\?|$)/i.test(postMedia(post));
 
-        if(file.size > 50 * 1024 * 1024) {
-            alert("Video 50MB'dan büyük olamaz! Lütfen daha kısa bir video seçin.");
-            return null;
-        }
+  function setSplashGone() {
+    setTimeout(() => $("splash-screen").classList.add("is-gone"), 450);
+  }
 
-        const formData = new FormData();
-        formData.append('reqtype', 'fileupload');
-        formData.append('fileToUpload', file);
+  function showAuthError(message) {
+    $("auth-error").textContent = message;
+  }
 
-        try {
-            // CORS proxy ile Catbox'a gönderiyoruz. (Tamamen ücretsiz, kart istemez)
-            const response = await fetch('https://corsproxy.io/?https://catbox.moe/user/api.php', {
-                method: 'POST',
-                body: formData
-            });
+  function firebaseError(error, fallback) {
+    const copy = {
+      "auth/invalid-email": "Geçerli bir e-posta adresi yaz.",
+      "auth/user-not-found": "Bu bilgilerle bir hesap bulunamadı.",
+      "auth/wrong-password": "Şifren doğru görünmüyor.",
+      "auth/invalid-credential": "E-posta veya şifre doğru değil.",
+      "auth/email-already-in-use": "Bu e-posta ile zaten bir hesap var.",
+      "auth/weak-password": "Şifren en az 6 karakter olmalı.",
+      "permission-denied": "Bu işlem için iznin yok. Firebase kurallarını kontrol et."
+    };
+    return copy[error?.code] || fallback || "Bir şey ters gitti. Lütfen tekrar dene.";
+  }
 
-            if (response.ok) {
-                const fileUrl = await response.text();
-                return fileUrl.trim();
-            } else {
-                throw new Error("API hatası");
-            }
-        } catch (error) {
-            console.error("Yükleme Hatası:", error);
-            alert("Sunucuya bağlanılamadı. Tarayıcınız dış kaynakları (CORS) engelliyor veya internetiniz yavaş olabilir.");
-            return null;
-        }
+  function openModal(id) {
+    document.querySelectorAll(".modal").forEach((modal) => modal.hidden = true);
+    $("modal-layer").hidden = false;
+    $(id).hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeModals() {
+    document.querySelectorAll(".modal").forEach((modal) => modal.hidden = true);
+    $("modal-layer").hidden = true;
+    document.body.style.overflow = "";
+    if (state.commentUnsubscribe) {
+      state.commentUnsubscribe();
+      state.commentUnsubscribe = null;
     }
+  }
 
-    // --- TEMA HAFIZASI ---
-    const savedTheme = localStorage.getItem('swipper_theme');
-    if (savedTheme === 'dark') {
-        document.body.classList.add('dark-mode');
-        const themeIcon = document.getElementById('theme-toggle-btn');
-        if(themeIcon && themeIcon.querySelector('i')) { 
-            themeIcon.querySelector('i').classList.remove('fa-moon'); 
-            themeIcon.querySelector('i').classList.add('fa-sun'); 
-        }
-    }
+  function updateThemeButton() {
+    const dark = document.body.classList.contains("is-dark");
+    $("theme-toggle").querySelector("i").className = dark ? "fa-solid fa-sun" : "fa-regular fa-moon";
+    $("theme-toggle").querySelector("span").textContent = dark ? "Açık tema" : "Tema";
+  }
 
-    // --- 1. OTURUM ---
-    document.getElementById('register-btn').addEventListener('click', () => {
-        const email = document.getElementById('auth-email').value;
-        const pass = document.getElementById('auth-password').value;
-        auth.createUserWithEmailAndPassword(email, pass).catch(err => showError(err.message));
+  function restoreTheme() {
+    if (localStorage.getItem("swipper-theme") === "dark") document.body.classList.add("is-dark");
+    updateThemeButton();
+  }
+
+  function setProfileSurfaces() {
+    const profile = currentProfile();
+    if (!state.user || !profile.username) return;
+    const avatar = avatarFor(profile);
+    [["side-user-avatar", avatar], ["quick-avatar", avatar], ["composer-avatar", avatar], ["bottom-avatar", avatar]].forEach(([id, src]) => {
+      $(id).src = src;
+      $(id).alt = profile.name || profile.username;
     });
+    $("side-user-name").textContent = profile.name || profile.username;
+    $("side-user-handle").textContent = `@${profile.username}`;
+    $("composer-name").textContent = profile.name || profile.username;
+    $("composer-handle").textContent = `@${profile.username}`;
+  }
 
-    document.getElementById('login-btn').addEventListener('click', () => {
-        const email = document.getElementById('auth-email').value;
-        const pass = document.getElementById('auth-password').value;
-        auth.signInWithEmailAndPassword(email, pass).catch(err => showError("Giriş başarısız. Bilgileri kontrol et."));
+  function showView(view) {
+    document.querySelectorAll(".view").forEach((item) => item.classList.toggle("is-active", item.id === `view-${view}`));
+    document.querySelectorAll(".nav-link[data-view]").forEach((item) => item.classList.toggle("is-active", item.dataset.view === view));
+    if (view === "profile") renderProfile();
+    if (view === "explore") renderExplore();
+    if (view === "messages") renderConversationList();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function renderStories() {
+    const root = $("stories");
+    const profile = currentProfile();
+    const stories = [
+      `<button class="story story--add" type="button" data-story-action="add"><span class="story-ring"><img src="${escapeHTML(avatarFor(profile))}" alt=""></span><span>Hikayen</span></button>`
+    ];
+    state.stories.slice(0, 15).forEach((story) => {
+      const user = state.users[story.authorId] || { username: "swipper" };
+      stories.push(`<button class="story" type="button" data-story-id="${escapeHTML(story.id)}"><span class="story-ring"><img src="${escapeHTML(avatarFor(user))}" alt="${escapeHTML(user.username)}"></span><span>${escapeHTML(user.username || "üye")}</span></button>`);
     });
+    root.innerHTML = stories.join("");
+  }
 
-    document.getElementById('logout-btn').addEventListener('click', () => auth.signOut());
+  function mediaMarkup(post) {
+    const url = postMedia(post);
+    if (!url) return "";
+    if (isVideo(post)) return `<div class="post-media"><video src="${escapeHTML(url)}" controls playsinline preload="metadata"></video></div>`;
+    return `<div class="post-media"><img src="${escapeHTML(url)}" alt="Paylaşım görseli" loading="lazy"></div>`;
+  }
 
-    function showError(msg) { authError.innerText = msg; authError.style.display = "block"; }
+  function postMarkup(post) {
+    const author = state.users[post.authorId] || { username: "swipper", name: "Swipper üyesi" };
+    const likes = Array.isArray(post.likes) ? post.likes : [];
+    const liked = likes.includes(state.user?.uid);
+    const canManage = post.authorId === state.user?.uid;
+    const content = postText(post);
+    return `<article class="post-card" data-post-id="${escapeHTML(post.id)}">
+      <div class="post-main">
+        <header class="post-head">
+          <button type="button" data-user-id="${escapeHTML(post.authorId)}"><img src="${escapeHTML(avatarFor(author))}" alt=""></button>
+          <button class="post-author" type="button" data-user-id="${escapeHTML(post.authorId)}"><b>${escapeHTML(author.name || author.username || "Swipper üyesi")}</b><span>@${escapeHTML(author.username || "uye")} · ${formatDate(post.createdAt)}</span></button>
+          ${canManage ? `<button class="post-more" type="button" data-post-action="delete" title="Gönderiyi sil" aria-label="Gönderiyi sil"><i class="fa-solid fa-trash-can"></i></button>` : ""}
+        </header>
+        ${content ? `<p class="post-text">${escapeHTML(content)}</p>` : ""}
+        ${mediaMarkup(post)}
+        <footer class="post-actions">
+          <button class="reaction-button ${liked ? "is-liked" : ""}" type="button" data-post-action="like"><i class="${liked ? "fa-solid" : "fa-regular"} fa-heart"></i><span>${likes.length || ""}</span></button>
+          <button class="reaction-button" type="button" data-post-action="comments"><i class="fa-regular fa-comment"></i><span>${Number(post.commentsCount || 0) || ""}</span></button>
+          <button class="reaction-button reaction-button--share" type="button" data-post-action="share"><i class="fa-regular fa-paper-plane"></i></button>
+          <span class="post-date">${formatDate(post.createdAt)}</span>
+        </footer>
+      </div>
+      <div class="post-comment-peek"><button type="button" data-post-action="comments">Yoruma katıl</button></div>
+    </article>`;
+  }
 
-    auth.onAuthStateChanged((user) => {
-        // FLICKER ÇÖZÜMÜ: Veri gelene kadar splash screen açık kalır
-        if (user) {
-            currentUser = user; 
-            db.collection('users').onSnapshot(snapshot => {
-                usersCache = {};
-                snapshot.forEach(doc => { usersCache[doc.id] = doc.data(); });
-                if (!usersCache[user.uid]) {
-                    const defaultProfile = {
-                        name: user.email.split('@')[0], username: user.email.split('@')[0],
-                        bio: "Swipper'a hoş geldin!", avatar: "https://i.pravatar.cc/150?img=11"
-                    };
-                    db.collection('users').doc(user.uid).set(defaultProfile);
-                } else { updateProfileUI(usersCache[user.uid]); }
-                renderExplore(); renderStories(); renderShareUsersList();
-                
-                // Her şey yüklenince ekranı aç
-                setTimeout(() => {
-                    splashScreen.style.display = "none";
-                    authScreen.style.display = "none"; 
-                    appContainer.style.display = "block";
-                }, 500);
-            });
-            loadRealtimePosts(); loadReelsFeed();
-        } else {
-            currentUser = null; 
-            setTimeout(() => {
-                splashScreen.style.display = "none";
-                authScreen.style.display = "flex"; 
-                appContainer.style.display = "none";
-            }, 500);
-        }
+  function renderFeed() {
+    const following = Array.isArray(currentProfile().following) ? currentProfile().following : [];
+    const posts = state.feed === "following" ? state.posts.filter((post) => following.includes(post.authorId)) : state.posts;
+    $("feed").innerHTML = posts.map(postMarkup).join("");
+    $("empty-feed").hidden = posts.length > 0;
+    document.querySelectorAll(".feed-tab").forEach((button) => button.classList.toggle("is-active", button.dataset.feed === state.feed));
+  }
+
+  function renderExplore() {
+    const query = $("user-search").value.trim().toLocaleLowerCase("tr-TR");
+    $("clear-search").hidden = !query;
+    const following = Array.isArray(currentProfile().following) ? currentProfile().following : [];
+    const people = Object.entries(state.users)
+      .filter(([uid, person]) => uid !== state.user?.uid && `${person.name || ""} ${person.username || ""}`.toLocaleLowerCase("tr-TR").includes(query))
+      .sort(([, a], [, b]) => String(a.username || "").localeCompare(String(b.username || ""), "tr"));
+    $("explore-users").innerHTML = people.length ? people.map(([uid, person]) => `<article class="user-card">
+      <button class="user-card-top" type="button" data-user-id="${escapeHTML(uid)}"><img src="${escapeHTML(avatarFor(person))}" alt=""><span class="user-card-info"><b>${escapeHTML(person.name || person.username || "Swipper üyesi")}</b><span>@${escapeHTML(person.username || "uye")}</span></span></button>
+      <p>${escapeHTML(person.bio || "Swipper'da yeni fikirler keşfediyor.")}</p>
+      <button class="button ${following.includes(uid) ? "button--soft" : "button--primary"}" type="button" data-follow-id="${escapeHTML(uid)}">${following.includes(uid) ? "Takipte" : "Takip et"}</button>
+    </article>`).join("") : `<div class="empty-state"><span class="empty-icon"><i class="fa-solid fa-magnifying-glass"></i></span><h3>Kimse bulunamadı</h3><p>Farklı bir isim ya da kullanıcı adı dene.</p></div>`;
+  }
+
+  function userPosts(uid) { return state.posts.filter((post) => post.authorId === uid); }
+
+  function profileMarkup(profile, uid, isOwn) {
+    const posts = userPosts(uid);
+    const following = Array.isArray(currentProfile().following) ? currentProfile().following : [];
+    const isFollowing = following.includes(uid);
+    const grid = posts.length ? posts.map((post) => {
+      const media = postMedia(post);
+      if (media) return `<button class="profile-grid-item" type="button" data-open-post="${escapeHTML(post.id)}">${isVideo(post) ? `<video src="${escapeHTML(media)}" muted preload="metadata"></video>` : `<img src="${escapeHTML(media)}" alt="">`}</button>`;
+      return `<button class="profile-grid-item profile-text-post" type="button" data-open-post="${escapeHTML(post.id)}">${escapeHTML(postText(post).slice(0, 70) || "Not")}</button>`;
+    }).join("") : `<div class="empty-state"><span class="empty-icon"><i class="fa-regular fa-image"></i></span><h3>Henüz paylaşım yok</h3><p>${isOwn ? "İlk anını paylaş ve profilini canlandır." : "Bu profil henüz bir şey paylaşmadı."}</p></div>`;
+    return `<div class="profile-hero"><div class="profile-hero-top"><img class="profile-avatar" src="${escapeHTML(avatarFor(profile))}" alt="${escapeHTML(profile.name || profile.username || "Profil")}"><div class="profile-head-copy"><h2>${escapeHTML(profile.name || profile.username || "Swipper üyesi")}</h2><span>@${escapeHTML(profile.username || "uye")}</span></div></div>
+      <p class="profile-bio">${escapeHTML(profile.bio || "Swipper'da yeni fikirler keşfediyor.")}</p>
+      <div class="profile-actions">${isOwn ? `<button id="edit-profile" class="button button--soft" type="button"><i class="fa-regular fa-pen-to-square"></i>Profili düzenle</button><button id="profile-share" class="button button--primary" type="button"><i class="fa-solid fa-plus"></i>Paylaş</button>` : `<button class="button ${isFollowing ? "button--soft" : "button--primary"}" type="button" data-follow-id="${escapeHTML(uid)}">${isFollowing ? "Takipte" : "Takip et"}</button><button class="button button--soft" type="button" data-message-id="${escapeHTML(uid)}"><i class="fa-regular fa-paper-plane"></i>Mesaj</button>`}</div>
+      <div class="profile-stats"><span class="profile-stat"><b>${posts.length}</b><span>Paylaşım</span></span><span class="profile-stat"><b>${Array.isArray(profile.followers) ? profile.followers.length : 0}</b><span>Takipçi</span></span><span class="profile-stat"><b>${Array.isArray(profile.following) ? profile.following.length : 0}</b><span>Takip</span></span></div></div>
+      <div class="profile-section-heading"><h3>Paylaşımlar</h3><span>${posts.length} içerik</span></div><div class="profile-grid">${grid}</div>`;
+  }
+
+  function renderProfile() {
+    if (!state.user) return;
+    $("profile-content").innerHTML = profileMarkup(currentProfile(), state.user.uid, true);
+  }
+
+  function openUserProfile(uid) {
+    const profile = state.users[uid];
+    if (!profile) return;
+    $("user-modal-content").innerHTML = `<div class="user-profile">${profileMarkup(profile, uid, uid === state.user?.uid)}</div>`;
+    openModal("user-modal");
+  }
+
+  function renderConversationList() {
+    const people = Object.entries(state.users).filter(([uid]) => uid !== state.user?.uid).sort(([, a], [, b]) => String(a.name || "").localeCompare(String(b.name || ""), "tr"));
+    $("conversation-list").innerHTML = people.length ? people.map(([uid, person]) => `<button class="conversation-item ${state.activeChatUserId === uid ? "is-active" : ""}" type="button" data-message-id="${escapeHTML(uid)}"><img src="${escapeHTML(avatarFor(person))}" alt=""><span class="conversation-copy"><b>${escapeHTML(person.name || person.username || "Swipper üyesi")}</b><span>@${escapeHTML(person.username || "uye")} ile sohbet et</span></span></button>`).join("") : `<div class="empty-state"><span class="empty-icon"><i class="fa-regular fa-comment"></i></span><h3>Henüz kimse yok</h3><p>Keşfet bölümünden insanlarla bağlantı kur.</p></div>`;
+  }
+
+  function renderMessageUsers() {
+    const root = $("message-user-list");
+    const people = Object.entries(state.users).filter(([uid]) => uid !== state.user?.uid);
+    root.innerHTML = people.length ? people.map(([uid, person]) => `<button class="message-user" type="button" data-message-id="${escapeHTML(uid)}"><img src="${escapeHTML(avatarFor(person))}" alt=""><span><b>${escapeHTML(person.name || person.username || "Swipper üyesi")}</b><small>@${escapeHTML(person.username || "uye")}</small></span></button>`).join("") : `<div class="empty-state"><span class="empty-icon"><i class="fa-regular fa-user"></i></span><h3>Henüz başka üye yok</h3><p>Yeni üyeler burada görünecek.</p></div>`;
+  }
+
+  function openChat(uid) {
+    const person = state.users[uid];
+    if (!person || !state.user) return;
+    closeModals();
+    state.activeChatUserId = uid;
+    $("chat-user-avatar").src = avatarFor(person);
+    $("chat-user-avatar").alt = person.name || person.username;
+    $("chat-user-name").textContent = person.name || person.username;
+    $("chat-user-handle").textContent = `@${person.username || "uye"}`;
+    $("chat-placeholder").hidden = true;
+    $("chat-content").hidden = false;
+    $("chat-pane").closest(".messages-layout").classList.add("is-chat-open");
+    showView("messages");
+    renderConversationList();
+    if (state.chatUnsubscribe) state.chatUnsubscribe();
+    const room = chatIdFor(state.user.uid, uid);
+    state.chatUnsubscribe = db.collection("chats").doc(room).collection("messages").orderBy("createdAt", "asc").onSnapshot((snapshot) => {
+      $("chat-messages").innerHTML = snapshot.docs.map((doc) => {
+        const message = doc.data();
+        return `<div class="message ${message.senderId === state.user.uid ? "message--mine" : "message--theirs"}">${escapeHTML(message.text || "")}</div>`;
+      }).join("");
+      $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+    }, () => { $("chat-messages").innerHTML = `<div class="empty-state"><p>Mesajlar şu an yüklenemiyor.</p></div>`; });
+  }
+
+  async function toggleFollow(uid) {
+    if (!state.user || uid === state.user.uid) return;
+    const profile = currentProfile();
+    const following = Array.isArray(profile.following) ? profile.following : [];
+    const followed = following.includes(uid);
+    try {
+      await Promise.all([
+        db.collection("users").doc(state.user.uid).update({ following: followed ? fieldValue.arrayRemove(uid) : fieldValue.arrayUnion(uid) }),
+        db.collection("users").doc(uid).update({ followers: followed ? fieldValue.arrayRemove(state.user.uid) : fieldValue.arrayUnion(state.user.uid) })
+      ]);
+    } catch (error) { alert(firebaseError(error, "Takip işlemi gerçekleştirilemedi.")); }
+  }
+
+  function openComposer() {
+    state.selectedMedia = null;
+    $("media-input").value = "";
+    $("media-preview").hidden = true;
+    $("media-preview").innerHTML = "";
+    $("post-text").value = "";
+    $("char-count").textContent = "0/1200";
+    $("upload-status").textContent = "";
+    openModal("composer-modal");
+    setTimeout(() => $("post-text").focus(), 80);
+  }
+
+  function previewMedia(file) {
+    const url = URL.createObjectURL(file);
+    const preview = $("media-preview");
+    const visual = file.type.startsWith("video/") ? `<video src="${url}" controls playsinline></video>` : `<img src="${url}" alt="Seçilen medya">`;
+    preview.innerHTML = `${visual}<button id="remove-media" type="button" aria-label="Medyayı kaldır"><i class="fa-solid fa-xmark"></i></button>`;
+    preview.hidden = false;
+    $("remove-media").onclick = () => {
+      URL.revokeObjectURL(url);
+      state.selectedMedia = null;
+      $("media-input").value = "";
+      preview.hidden = true;
+      preview.innerHTML = "";
+    };
+  }
+
+  async function uploadMedia(file, messageTarget) {
+    if (file.size > 50 * 1024 * 1024) throw new Error("Fotoğraf veya video 50 MB'dan küçük olmalı.");
+    messageTarget.textContent = "Medya hazırlanıyor ve yükleniyor…";
+    const formData = new FormData();
+    formData.append("reqtype", "fileupload");
+    formData.append("fileToUpload", file);
+    const response = await fetch("https://corsproxy.io/?https://catbox.moe/user/api.php", { method: "POST", body: formData });
+    if (!response.ok) throw new Error("Medya yüklenemedi. Lütfen bağlantını kontrol edip tekrar dene.");
+    const url = (await response.text()).trim();
+    if (!safeMediaURL(url)) throw new Error("Yüklenen medya için güvenli bir bağlantı alınamadı.");
+    return url;
+  }
+
+  async function publishPost(event) {
+    event.preventDefault();
+    const text = $("post-text").value.trim();
+    if (!text && !state.selectedMedia) { $("upload-status").textContent = "Bir not yaz veya medya ekle."; return; }
+    const button = $("publish-btn");
+    button.disabled = true;
+    try {
+      let mediaUrl = "";
+      if (state.selectedMedia) mediaUrl = await uploadMedia(state.selectedMedia, $("upload-status"));
+      await db.collection("posts").add({
+        authorId: state.user.uid,
+        text,
+        caption: text,
+        mediaUrl,
+        imageUrl: mediaUrl,
+        mediaType: state.selectedMedia?.type.startsWith("video/") ? "video" : state.selectedMedia ? "image" : "",
+        likes: [],
+        commentsCount: 0,
+        createdAt: fieldValue.serverTimestamp()
+      });
+      closeModals();
+    } catch (error) { $("upload-status").textContent = error.message || firebaseError(error); }
+    finally { button.disabled = false; }
+  }
+
+  async function createStory(file) {
+    if (!file || !state.user) return;
+    try {
+      const progress = { textContent: "" };
+      const url = await uploadMedia(file, progress);
+      await db.collection("stories").add({ authorId: state.user.uid, imageUrl: url, createdAt: fieldValue.serverTimestamp() });
+    } catch (error) { alert(error.message || "Hikaye yüklenemedi."); }
+  }
+
+  async function likePost(id) {
+    if (!state.user) return;
+    const ref = db.collection("posts").doc(id);
+    try {
+      await db.runTransaction(async (transaction) => {
+        const doc = await transaction.get(ref);
+        if (!doc.exists) return;
+        const likes = Array.isArray(doc.data().likes) ? doc.data().likes : [];
+        const next = likes.includes(state.user.uid) ? likes.filter((item) => item !== state.user.uid) : [...likes, state.user.uid];
+        transaction.update(ref, { likes: next });
+      });
+    } catch (error) { alert(firebaseError(error, "Beğeni kaydedilemedi.")); }
+  }
+
+  async function deletePost(id) {
+    if (!window.confirm("Bu paylaşım silinsin mi? Bu işlem geri alınamaz.")) return;
+    try { await db.collection("posts").doc(id).delete(); }
+    catch (error) { alert(firebaseError(error, "Paylaşım silinemedi.")); }
+  }
+
+  function openComments(id) {
+    state.activeCommentPostId = id;
+    $("comments-list").innerHTML = "";
+    $("comment-input").value = "";
+    openModal("comments-modal");
+    if (state.commentUnsubscribe) state.commentUnsubscribe();
+    state.commentUnsubscribe = db.collection("posts").doc(id).collection("comments").orderBy("createdAt", "asc").onSnapshot((snapshot) => {
+      $("comments-list").innerHTML = snapshot.docs.length ? snapshot.docs.map((doc) => {
+        const comment = doc.data();
+        const author = state.users[comment.authorId] || { username: "üye" };
+        return `<article class="comment"><img class="comment-avatar" src="${escapeHTML(avatarFor(author))}" alt=""><div class="comment-body"><b>@${escapeHTML(author.username || "uye")}</b><p>${escapeHTML(comment.text || "")}</p></div></article>`;
+      }).join("") : `<div class="empty-state"><span class="empty-icon"><i class="fa-regular fa-comment"></i></span><h3>İlk yorumu sen bırak</h3><p>Bu paylaşım için henüz konuşma başlamadı.</p></div>`;
+      $("comments-list").scrollTop = $("comments-list").scrollHeight;
+    }, () => { $("comments-list").innerHTML = `<div class="empty-state"><p>Yorumlar yüklenemedi.</p></div>`; });
+  }
+
+  async function sendComment(event) {
+    event.preventDefault();
+    const text = $("comment-input").value.trim();
+    if (!text || !state.activeCommentPostId) return;
+    const post = state.posts.find((item) => item.id === state.activeCommentPostId);
+    try {
+      await db.collection("posts").doc(state.activeCommentPostId).collection("comments").add({ authorId: state.user.uid, text, createdAt: fieldValue.serverTimestamp() });
+      if (post) await db.collection("posts").doc(state.activeCommentPostId).update({ commentsCount: fieldValue.increment(1) });
+      $("comment-input").value = "";
+    } catch (error) { alert(firebaseError(error, "Yorum gönderilemedi.")); }
+  }
+
+  async function sendMessage(event) {
+    event.preventDefault();
+    const text = $("chat-input").value.trim();
+    if (!text || !state.activeChatUserId || !state.user) return;
+    try {
+      await db.collection("chats").doc(chatIdFor(state.user.uid, state.activeChatUserId)).collection("messages").add({ senderId: state.user.uid, text, createdAt: fieldValue.serverTimestamp() });
+      $("chat-input").value = "";
+    } catch (error) { alert(firebaseError(error, "Mesaj gönderilemedi.")); }
+  }
+
+  async function sharePostTo(uid) {
+    const post = state.posts.find((item) => item.id === state.sharePostId);
+    if (!post || !state.user) return openChat(uid);
+    const author = state.users[post.authorId] || { name: "Bir üye" };
+    const summary = postText(post).slice(0, 180) || "Bir fotoğraf paylaştı.";
+    try {
+      await db.collection("chats").doc(chatIdFor(state.user.uid, uid)).collection("messages").add({
+        senderId: state.user.uid,
+        text: `↗ ${author.name || author.username || "Bir üye"} paylaşımı: ${summary}`,
+        createdAt: fieldValue.serverTimestamp()
+      });
+      state.sharePostId = null;
+      openChat(uid);
+    } catch (error) { alert(firebaseError(error, "Paylaşım gönderilemedi.")); }
+  }
+
+  function openStory(id) {
+    const story = state.stories.find((item) => item.id === id);
+    if (!story) return;
+    const author = state.users[story.authorId] || { username: "swipper" };
+    const url = safeMediaURL(story.imageUrl || story.mediaUrl);
+    if (!url) return;
+    $("story-content").innerHTML = `<div class="story-view"><img src="${escapeHTML(url)}" alt="Hikaye"><div class="story-copy"><img src="${escapeHTML(avatarFor(author))}" alt=""><span><b>${escapeHTML(author.name || author.username || "Swipper üyesi")}</b><small>@${escapeHTML(author.username || "uye")} · ${formatDate(story.createdAt)}</small></span></div></div>`;
+    openModal("story-modal");
+  }
+
+  function openProfileEditor() {
+    const profile = currentProfile();
+    $("profile-name-input").value = profile.name || "";
+    $("profile-handle-input").value = profile.username || "";
+    $("profile-bio-input").value = profile.bio || "";
+    $("profile-error").textContent = "";
+    openModal("profile-modal");
+  }
+
+  async function saveProfile(event) {
+    event.preventDefault();
+    const name = $("profile-name-input").value.trim();
+    const username = cleanHandle($("profile-handle-input").value);
+    const bio = $("profile-bio-input").value.trim();
+    if (!name || username.length < 3) { $("profile-error").textContent = "Adını ve en az 3 karakterlik bir kullanıcı adını yaz."; return; }
+    const duplicate = Object.entries(state.users).find(([uid, person]) => uid !== state.user.uid && cleanHandle(person.username) === username);
+    if (duplicate) { $("profile-error").textContent = "Bu kullanıcı adı zaten alınmış."; return; }
+    try { await db.collection("users").doc(state.user.uid).update({ name, username, bio }); closeModals(); }
+    catch (error) { $("profile-error").textContent = firebaseError(error, "Profil kaydedilemedi."); }
+  }
+
+  function ensureProfile(user) {
+    return db.collection("users").doc(user.uid).get().then((doc) => {
+      if (doc.exists) return;
+      const name = user.email?.split("@")[0] || "yeniüye";
+      const username = cleanHandle(name).slice(0, 20) || `uye${user.uid.slice(0, 5)}`;
+      return db.collection("users").doc(user.uid).set({ name, username, bio: "Swipper'a yeni katıldı ✦", avatar: "", following: [], followers: [] });
     });
+  }
 
-    function updateProfileUI(data) {
-        document.getElementById('display-username').innerText = `@${data.username}`;
-        document.getElementById('display-name').innerText = data.name;
-        document.getElementById('display-bio').innerText = data.bio;
-        
-        const mainPic = document.getElementById('main-profile-pic');
-        const navPic = document.getElementById('nav-profile-img');
-        const storyPic = document.getElementById('my-story-img');
-        
-        if(mainPic.src !== data.avatar) mainPic.src = data.avatar;
-        if(navPic.src !== data.avatar) navPic.src = data.avatar;
-        if(storyPic.src !== data.avatar) storyPic.src = data.avatar;
+  function startRealtimeData() {
+    state.unsubscribers.forEach((unsubscribe) => unsubscribe());
+    state.unsubscribers = [];
+    state.unsubscribers.push(db.collection("users").onSnapshot((snapshot) => {
+      state.users = {};
+      snapshot.forEach((doc) => state.users[doc.id] = doc.data());
+      setProfileSurfaces(); renderStories(); renderFeed(); renderExplore(); renderProfile(); renderConversationList(); renderMessageUsers();
+    }, () => { alert("Kullanıcı verileri yüklenemedi. Firebase kurallarını kontrol et."); }));
+    state.unsubscribers.push(db.collection("posts").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
+      state.posts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      renderFeed(); renderProfile();
+    }, () => { $("feed").innerHTML = `<div class="empty-state"><span class="empty-icon"><i class="fa-solid fa-triangle-exclamation"></i></span><h3>Akış yüklenemedi</h3><p>Firebase bağlantısını ve güvenlik kurallarını kontrol et.</p></div>`; }));
+    state.unsubscribers.push(db.collection("stories").orderBy("createdAt", "desc").limit(20).onSnapshot((snapshot) => {
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      state.stories = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).filter((story) => !dateFrom(story.createdAt) || dateFrom(story.createdAt).getTime() > cutoff);
+      renderStories();
+    }, () => { state.stories = []; renderStories(); }));
+  }
+
+  function shutdownRealtimeData() {
+    state.unsubscribers.forEach((unsubscribe) => unsubscribe());
+    state.unsubscribers = [];
+    if (state.chatUnsubscribe) state.chatUnsubscribe();
+    if (state.commentUnsubscribe) state.commentUnsubscribe();
+    state.chatUnsubscribe = null;
+    state.commentUnsubscribe = null;
+  }
+
+  $("auth-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    showAuthError("");
+    try { await auth.signInWithEmailAndPassword($("auth-email").value.trim(), $("auth-password").value); }
+    catch (error) { showAuthError(firebaseError(error, "Giriş yapılamadı.")); }
+  });
+  $("register-btn").addEventListener("click", async () => {
+    showAuthError("");
+    try { await auth.createUserWithEmailAndPassword($("auth-email").value.trim(), $("auth-password").value); }
+    catch (error) { showAuthError(firebaseError(error, "Hesap oluşturulamadı.")); }
+  });
+  $("logout-btn").addEventListener("click", () => auth.signOut());
+  $("theme-toggle").addEventListener("click", () => { document.body.classList.toggle("is-dark"); localStorage.setItem("swipper-theme", document.body.classList.contains("is-dark") ? "dark" : "light"); updateThemeButton(); });
+  document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
+  [$("open-composer"), $("open-composer-side"), $("mobile-compose"), $("bottom-compose")].forEach((button) => button.addEventListener("click", openComposer));
+  document.querySelectorAll(".open-composer-trigger").forEach((button) => button.addEventListener("click", openComposer));
+  $("refresh-feed").addEventListener("click", () => { renderFeed(); $("refresh-feed").querySelector("i").classList.add("fa-spin"); setTimeout(() => $("refresh-feed").querySelector("i").classList.remove("fa-spin"), 400); });
+  $("user-search").addEventListener("input", renderExplore);
+  $("clear-search").addEventListener("click", () => { $("user-search").value = ""; renderExplore(); $("user-search").focus(); });
+  document.querySelectorAll(".feed-tab").forEach((button) => button.addEventListener("click", () => { state.feed = button.dataset.feed; renderFeed(); }));
+  $("composer-form").addEventListener("submit", publishPost);
+  $("post-text").addEventListener("input", () => $("char-count").textContent = `${$("post-text").value.length}/1200`);
+  $("media-input").addEventListener("change", (event) => { const file = event.target.files[0]; if (!file) return; state.selectedMedia = file; previewMedia(file); });
+  $("story-input").addEventListener("change", async (event) => { await createStory(event.target.files[0]); event.target.value = ""; });
+  $("comment-form").addEventListener("submit", sendComment);
+  $("chat-form").addEventListener("submit", sendMessage);
+  $("profile-form").addEventListener("submit", saveProfile);
+  $("new-message").addEventListener("click", () => { renderMessageUsers(); openModal("new-message-modal"); });
+  $("back-to-conversations").addEventListener("click", () => $("chat-pane").closest(".messages-layout").classList.remove("is-chat-open"));
+  $("chat-user-button").addEventListener("click", () => state.activeChatUserId && openUserProfile(state.activeChatUserId));
+  $("modal-layer").addEventListener("click", (event) => { if (event.target === $("modal-layer")) closeModals(); });
+  document.querySelectorAll(".close-modal").forEach((button) => button.addEventListener("click", closeModals));
+
+  document.addEventListener("click", (event) => {
+    const userButton = event.target.closest("[data-user-id]");
+    if (userButton) { openUserProfile(userButton.dataset.userId); return; }
+    const followButton = event.target.closest("[data-follow-id]");
+    if (followButton) { toggleFollow(followButton.dataset.followId); return; }
+    const messageButton = event.target.closest("[data-message-id]");
+    if (messageButton) { state.sharePostId ? sharePostTo(messageButton.dataset.messageId) : openChat(messageButton.dataset.messageId); return; }
+    const postButton = event.target.closest("[data-post-action]");
+    if (postButton) {
+      const id = postButton.closest("[data-post-id]")?.dataset.postId;
+      if (!id) return;
+      if (postButton.dataset.postAction === "like") likePost(id);
+      if (postButton.dataset.postAction === "comments") openComments(id);
+      if (postButton.dataset.postAction === "delete") deletePost(id);
+      if (postButton.dataset.postAction === "share") { state.sharePostId = id; renderMessageUsers(); openModal("new-message-modal"); }
+      return;
     }
+    const openPost = event.target.closest("[data-open-post]");
+    if (openPost) { const post = state.posts.find((item) => item.id === openPost.dataset.openPost); if (post) openComments(post.id); return; }
+    const storyButton = event.target.closest("[data-story-id]");
+    if (storyButton) { openStory(storyButton.dataset.storyId); return; }
+    if (event.target.closest("[data-story-action='add']")) { $("story-input").click(); return; }
+    if (event.target.closest("#edit-profile")) { openProfileEditor(); return; }
+    if (event.target.closest("#profile-share")) { closeModals(); openComposer(); }
+  });
 
-    // --- 2. PROFİL VE KULLANICI ADI ÇAKIŞMASI ---
-    document.querySelectorAll('.p-tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            document.querySelectorAll('.p-tab').forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            document.querySelectorAll('.profile-tab-content').forEach(c => { c.style.display = "none"; c.classList.remove('active'); });
-            const targetId = tab.getAttribute('data-target');
-            if(targetId) { const targetDiv = document.getElementById(targetId); targetDiv.style.display = targetId === 'p-grid' ? 'grid' : 'block'; targetDiv.classList.add('active'); }
-        });
-    });
-
-    const editModal = document.getElementById('edit-profile-modal');
-    document.getElementById('edit-profile-trigger').onclick = () => {
-        const data = usersCache[currentUser.uid]; if(!data) return;
-        document.getElementById('input-name').value = data.name;
-        document.getElementById('input-username').value = data.username;
-        document.getElementById('input-bio').value = data.bio;
-        editModal.style.display = "flex";
-    };
-
-    document.getElementById('save-profile-btn').onclick = async () => {
-        const newName = document.getElementById('input-name').value;
-        const newUsername = document.getElementById('input-username').value.replace(/\s+/g, '').toLowerCase();
-        const newBio = document.getElementById('input-bio').value;
-
-        // KULLANICI ADI ÇAKIŞMASINI ÖNLEME
-        const snapshot = await db.collection('users').where('username', '==', newUsername).get();
-        let isTaken = false;
-        snapshot.forEach(doc => { if(doc.id !== currentUser.uid) { isTaken = true; } });
-
-        if(isTaken) { 
-            alert(`Bu kullanıcı adı (@${newUsername}) daha önce başkası tarafından alınmış. Lütfen başka bir isim deneyin.`); 
-            return; 
-        }
-        
-        db.collection('users').doc(currentUser.uid).update({ name: newName, username: newUsername, bio: newBio }).then(() => editModal.style.display = "none");
-    };
-
-    const profileUpload = document.getElementById('profile-upload');
-    document.getElementById('avatar-container').onclick = () => profileUpload.click();
-    profileUpload.onchange = async (e) => {
-        const file = e.target.files[0]; if (!file) return;
-        document.getElementById('display-bio').innerText = "Profil fotoğrafı yükleniyor...";
-        const url = await uploadToFreeCloud(file);
-        if(url) { 
-            db.collection('users').doc(currentUser.uid).update({ avatar: url }); 
-            document.getElementById('display-bio').innerText = usersCache[currentUser.uid].bio; 
-        } else { document.getElementById('display-bio').innerText = "Yükleme başarısız!"; }
-    };
-
-    // --- 3. PAYLAŞIM ---
-    const createOptionsModal = document.getElementById('create-options-modal');
-    const postModal = document.getElementById('post-modal');
-    
-    document.getElementById('header-add-btn').onclick = (e) => { e.preventDefault(); createOptionsModal.style.display = "flex"; };
-    
-    document.getElementById('btn-create-post').onclick = () => {
-        createOptionsModal.style.display = "none"; postModal.style.display = "flex";
-        document.getElementById('post-image-preview').style.display = "none";
-        document.getElementById('post-content-input').value = "";
-        document.getElementById('upload-modal-title').innerText = "Yeni Paylaşım";
-        document.getElementById('save-post-btn').innerText = "Paylaş";
-        document.getElementById('global-media-upload').setAttribute('accept', 'image/*,video/*');
-        pendingUploadFile = null; pendingUploadType = 'post';
-    };
-
-    document.getElementById('btn-create-reel').onclick = () => {
-        createOptionsModal.style.display = "none"; postModal.style.display = "flex";
-        document.getElementById('post-image-preview').style.display = "none";
-        document.getElementById('post-content-input').value = "";
-        document.getElementById('upload-modal-title').innerText = "Yeni Reels Paylaş";
-        document.getElementById('save-post-btn').innerText = "Reels Paylaş";
-        document.getElementById('global-media-upload').setAttribute('accept', 'video/*,image/*'); 
-        pendingUploadFile = null; pendingUploadType = 'reel';
-    };
-
-    document.getElementById('select-post-image').onclick = () => document.getElementById('global-media-upload').click();
-    
-    document.getElementById('global-media-upload').onchange = (e) => {
-        const file = e.target.files[0]; if(!file) return;
-        pendingUploadFile = file;
-
-        const localPreviewUrl = URL.createObjectURL(file);
-        const container = document.getElementById('media-preview-container');
-        
-        if(file.type.startsWith('video/')) {
-            container.innerHTML = `<video src="${localPreviewUrl}" style="width:100%; border-radius:8px; max-height:250px; background:#000;" autoplay loop muted playsinline></video>`;
-        } else {
-            container.innerHTML = `<img src="${localPreviewUrl}" style="width:100%; border-radius:8px; max-height:250px; object-fit:cover;">`;
-        }
-        document.getElementById('post-image-preview').style.display = "block";
-    };
-
-    document.getElementById('remove-post-image').onclick = () => {
-        pendingUploadFile = null; document.getElementById('post-image-preview').style.display = "none"; document.getElementById('global-media-upload').value = "";
-    };
-
-    document.getElementById('save-post-btn').onclick = async () => {
-        const caption = document.getElementById('post-content-input').value;
-        if(!pendingUploadFile && caption.trim() === "") return;
-
-        const saveBtn = document.getElementById('save-post-btn');
-        const loadText = document.getElementById('upload-loading-text');
-        
-        saveBtn.style.display = "none"; loadText.style.display = "block";
-        
-        let fileUrl = null;
-        if(pendingUploadFile) {
-            fileUrl = await uploadToFreeCloud(pendingUploadFile);
-            if(!fileUrl) { saveBtn.style.display = "block"; loadText.style.display = "none"; return; }
-        }
-
-        if(pendingUploadType === 'reel') {
-            await db.collection('reels').add({
-                videoUrl: fileUrl, caption: caption, authorId: currentUser.uid, type: 'reel', createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-        } else {
-            await db.collection('posts').add({
-                imageUrl: fileUrl, caption: caption, authorId: currentUser.uid, likes: [], type: 'post', createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-        }
-
-        postModal.style.display = "none"; 
-        saveBtn.style.display = "block"; loadText.style.display = "none";
-        document.getElementById('post-content-input').value = ""; 
-        document.getElementById('post-image-preview').style.display = "none";
-        pendingUploadFile = null;
-    };
-
-    // --- 4. HİKAYE ---
-    const storyUpload = document.getElementById('story-image-upload');
-    document.getElementById('add-story-btn').onclick = () => { if (document.getElementById('add-story-btn').querySelector('.plus-icon').style.display !== 'none') { storyUpload.click(); } };
-    document.getElementById('btn-create-story-menu').onclick = () => { createOptionsModal.style.display = "none"; storyUpload.click(); };
-    
-    storyUpload.onchange = async (e) => {
-        const file = e.target.files[0]; if(!file) return;
-        const wrapper = document.getElementById('stories-wrapper');
-        wrapper.insertAdjacentHTML('afterbegin', `<div class="story" id="temp-loading-story"><div class="story-ring" style="opacity:0.5;"><img src="https://i.pravatar.cc/150?img=11"></div><span>Yükleniyor...</span></div>`);
-        
-        const url = await uploadToFreeCloud(file);
-        if(url) { await db.collection('stories').add({ imageUrl: url, authorId: currentUser.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp() }); }
-        document.getElementById('temp-loading-story').remove();
-    };
-
-    function renderStories() {
-        db.collection('stories').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
-            const wrapper = document.getElementById('stories-wrapper');
-            const myBtn = wrapper.children[0]; wrapper.innerHTML = ""; wrapper.appendChild(myBtn);
-
-            const seenUsers = new Set(); let hasMyStory = false; const now = Date.now();
-            snapshot.forEach(doc => {
-                const story = doc.data();
-                if(!story.createdAt) return;
-                if (now - story.createdAt.toDate().getTime() > 24 * 60 * 60 * 1000) { db.collection('stories').doc(doc.id).delete(); return; }
-                
-                if (story.authorId === currentUser.uid && !hasMyStory) {
-                    hasMyStory = true;
-                    myBtn.onclick = () => openStory(story.imageUrl, usersCache[currentUser.uid].username, usersCache[currentUser.uid].avatar, currentUser.uid);
-                    myBtn.querySelector('.story-ring').style.background = "var(--insta-gradient)"; myBtn.querySelector('.plus-icon').style.display = "none";
-                }
-                if (seenUsers.has(story.authorId) || story.authorId === currentUser.uid) return;
-                seenUsers.add(story.authorId);
-                const uData = usersCache[story.authorId]; if(!uData) return;
-
-                wrapper.insertAdjacentHTML('beforeend', `
-                    <div class="story" onclick="openStory('${story.imageUrl}', '${uData.username}', '${uData.avatar}', '${story.authorId}')">
-                        <div class="story-ring"><img src="${uData.avatar}"></div><span>${uData.username}</span>
-                    </div>
-                `);
-            });
-            if(!hasMyStory) {
-                myBtn.onclick = () => storyUpload.click(); myBtn.querySelector('.story-ring').style.background = "transparent"; myBtn.querySelector('.plus-icon').style.display = "flex";
-            }
-        });
+  restoreTheme();
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) {
+      shutdownRealtimeData();
+      state.user = null; state.users = {}; state.posts = []; state.stories = [];
+      $("app-shell").hidden = true;
+      $("auth-screen").hidden = false;
+      setSplashGone();
+      return;
     }
-
-    window.openStory = (imgUrl, username, avatar, authorId) => {
-        clearTimeout(storyTimer); document.getElementById('story-viewer-img').src = imgUrl;
-        document.getElementById('story-viewer-username').innerText = username; document.getElementById('story-viewer-avatar').src = avatar;
-        document.getElementById('story-viewer-modal').style.display = "flex"; activeStoryAuthorId = authorId;
-
-        const bar = document.getElementById('story-progress-bar'); bar.style.transition = 'none'; bar.style.width = '0%';
-        setTimeout(() => { bar.style.transition = 'width 5s linear'; bar.style.width = '100%'; }, 50);
-        storyTimer = setTimeout(() => closeStory(), 5000);
-    };
-
-    function closeStory() {
-        clearTimeout(storyTimer); document.getElementById('story-viewer-modal').style.display = "none";
-        document.getElementById('story-progress-bar').style.width = '0%'; activeStoryAuthorId = null;
-    }
-
-    document.getElementById('send-story-reply').onclick = () => {
-        const text = document.getElementById('story-reply-input').value;
-        if(text.trim() === "" || !activeStoryAuthorId || activeStoryAuthorId === currentUser.uid) return;
-        const chatId = getChatRoomId(currentUser.uid, activeStoryAuthorId);
-        db.collection('chats').doc(chatId).collection('messages').add({
-            senderId: currentUser.uid, text: `Hikayeye Yanıt: ${text}`, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => { alert("Yanıt DM olarak iletildi!"); document.getElementById('story-reply-input').value = ""; closeStory(); });
-    };
-
-    // --- 5. GÖNDERİ AKIŞI ---
-    function generatePostHTML(id, post, uData, showOptions) {
-        let timeStr = "Şimdi"; if(post.createdAt) timeStr = post.createdAt.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        
-        let mediaHTML = '';
-        if(post.imageUrl) {
-            if(post.imageUrl.includes('.mp4') || post.imageUrl.includes('video') || post.imageUrl.includes('catbox')) {
-                // Catbox genellikle video ise mp4 döner. Basit ayrım:
-                if(post.imageUrl.includes('.mp4') || post.imageUrl.includes('.webm')) {
-                    mediaHTML = `<video class="post-image" src="${post.imageUrl}" controls playsinline></video>`;
-                } else {
-                    mediaHTML = `<img class="post-image" src="${post.imageUrl}">`;
-                }
-            } else {
-                mediaHTML = `<img class="post-image" src="${post.imageUrl}">`;
-            }
-        }
-        
-        const captionHTML = post.caption && post.caption.trim() !== "" ? `<div class="post-caption">${post.imageUrl ? `<span>${uData.username}</span>` : ''}${post.caption}</div>` : '';
-        const optionsHTML = showOptions ? `<button class="post-manage-btn" onclick="event.stopPropagation(); openPostOptions('${id}', '${post.caption || ''}', '${post.type || 'post'}')"><i class="fa-solid fa-ellipsis-vertical"></i></button>` : '';
-
-        const likesArray = post.likes || [];
-        const isLiked = likesArray.includes(currentUser.uid);
-        const heartClass = isLiked ? "fa-solid fa-heart liked" : "fa-regular fa-heart";
-
-        return `
-            <div class="post" id="post-card-${id}">
-                <div class="post-header">
-                    <div class="post-header-left"><img class="post-avatar" src="${uData.avatar}"><span class="post-author">${uData.username}</span><span class="post-time-feed">· ${timeStr}</span></div>
-                    ${optionsHTML}
-                </div>
-                ${!post.imageUrl ? captionHTML : ''}
-                ${mediaHTML}
-                <div class="post-actions">
-                    <i class="${heartClass}" onclick="toggleLike('${id}')"></i>
-                    <i class="fa-regular fa-comment" onclick="openComments('${id}')"></i>
-                    <i class="fa-regular fa-paper-plane" onclick="openShareModal('${id}')"></i>
-                </div>
-                <span class="post-likes-count">${likesArray.length} beğenme</span>
-                ${post.imageUrl ? captionHTML : ''}
-                <div id="feed-comments-box-${id}" style="padding: 5px 15px 0 15px; font-size: 13px;"></div>
-            </div>
-        `;
-    }
-
-    window.toggleLike = (postId) => {
-        const postRef = db.collection('posts').doc(postId);
-        postRef.get().then(doc => {
-            if(doc.exists) {
-                const p = doc.data(); const likes = p.likes || [];
-                if(likes.includes(currentUser.uid)) { postRef.update({ likes: firebase.firestore.FieldValue.arrayRemove(currentUser.uid) }); } 
-                else { postRef.update({ likes: firebase.firestore.FieldValue.arrayUnion(currentUser.uid) }); }
-            }
-        });
-    };
-
-    window.openComments = (postId) => {
-        activeCommentPostId = postId; document.getElementById('comments-modal').style.display = "flex";
-        const list = document.getElementById('comments-list'); list.innerHTML = "";
-        db.collection('posts').doc(postId).collection('comments').orderBy('createdAt', 'asc').onSnapshot(snapshot => {
-            list.innerHTML = "";
-            snapshot.forEach(doc => {
-                const c = doc.data(); const u = usersCache[c.authorId] || { username: "kullanici", avatar: "https://i.pravatar.cc/150" };
-                list.insertAdjacentHTML('beforeend', `<div class="comment-item"><img src="${u.avatar}"><div class="comment-content"><span>${u.username}</span>${c.text}</div></div>`);
-            });
-            list.scrollTop = list.scrollHeight;
-        });
-    };
-
-    document.getElementById('send-comment-btn').onclick = () => {
-        const input = document.getElementById('comment-input');
-        if(input.value.trim() === "" || !activeCommentPostId) return;
-        db.collection('posts').doc(activeCommentPostId).collection('comments').add({
-            authorId: currentUser.uid, text: input.value, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => input.value = "");
-    };
-
-    function renderFeedCommentsPreview(postId, boxElementId) {
-        db.collection('posts').doc(postId).collection('comments').orderBy('createdAt', 'desc').limit(2).onSnapshot(snap => {
-            const box = document.getElementById(boxElementId);
-            if(!box) return; box.innerHTML = "";
-            const reversedDocs = snap.docs.reverse();
-            reversedDocs.forEach(doc => {
-                const c = doc.data(); const u = usersCache[c.authorId] || { username: "kullanici" };
-                box.insertAdjacentHTML('beforeend', `<div style="margin-bottom:3px;"><b style="font-weight:600; font-size:13px; margin-right:5px;">${u.username}</b><span style="font-size:13px;">${c.text}</span></div>`);
-            });
-        });
-    }
-
-    function loadRealtimePosts() {
-        db.collection("posts").orderBy("createdAt", "desc").onSnapshot(snapshot => {
-            const feed = document.getElementById('feed-container'); const pGrid = document.getElementById('p-grid'); const pTweets = document.getElementById('p-tweets');
-            feed.innerHTML = ""; if(pGrid) pGrid.innerHTML = ""; if(pTweets) pTweets.innerHTML = "";
-            let myPostCount = 0; postsCache = {}; 
-
-            snapshot.forEach(doc => {
-                const post = doc.data(); postsCache[doc.id] = post; 
-                const uData = usersCache[post.authorId] || { username: "kullanici", avatar: "https://i.pravatar.cc/150" };
-                const isMyPost = post.authorId === currentUser.uid;
-
-                const html = generatePostHTML(doc.id, post, uData, isMyPost);
-                feed.insertAdjacentHTML('beforeend', html);
-                if(document.getElementById(`feed-comments-box-${doc.id}`)) renderFeedCommentsPreview(doc.id, `feed-comments-box-${doc.id}`);
-
-                if(isMyPost) {
-                    myPostCount++;
-                    if(post.imageUrl) {
-                        const mediaTag = (post.imageUrl.includes('.mp4') || post.imageUrl.includes('video')) 
-                            ? `<video src="${post.imageUrl}" style="width:100%; height:100%; object-fit:cover;"></video><i class="fa-solid fa-play" style="position:absolute; top:5px; left:5px; color:white;"></i>` 
-                            : `<img src="${post.imageUrl}">`;
-                            
-                        pGrid.insertAdjacentHTML('beforeend', `
-                            <div class="grid-item" onclick="openSinglePostModal('${doc.id}')">
-                                ${mediaTag}
-                                <button class="grid-manage-btn" onclick="event.stopPropagation(); openPostOptions('${doc.id}', '${post.caption || ''}', 'post')"><i class="fa-solid fa-ellipsis-vertical"></i></button>
-                            </div>
-                        `);
-                    } else { pTweets.insertAdjacentHTML('beforeend', html); }
-                }
-            });
-            document.getElementById('post-count').innerText = myPostCount;
-        });
-    }
-
-    window.openSinglePostModal = (postId) => {
-        const post = postsCache[postId]; if(!post) return;
-        const uData = usersCache[post.authorId]; const isMyPost = post.authorId === currentUser.uid;
-        document.getElementById('single-post-container').innerHTML = generatePostHTML(postId, post, uData, isMyPost);
-        if(document.getElementById(`feed-comments-box-${postId}`)) renderFeedCommentsPreview(postId, `feed-comments-box-${postId}`);
-        document.getElementById('single-post-modal').style.display = "flex";
-    };
-
-    // --- 6. DÜZENLE & SİL ---
-    window.openPostOptions = (postId, caption, type = 'post') => {
-        currentEditPostId = postId; currentEditPostCaption = caption; activeCommentPostTypeForOptions = type;
-        document.getElementById('post-options-modal').style.display = "flex";
-    };
-    document.getElementById('opt-edit-post').onclick = () => {
-        document.getElementById('post-options-modal').style.display = "none"; document.getElementById('edit-post-input').value = currentEditPostCaption; document.getElementById('edit-post-modal').style.display = "flex";
-    };
-    document.getElementById('opt-del-post').onclick = () => {
-        if(confirm("Bu paylaşımı silmek istediğine emin misin?")) {
-            const cName = activeCommentPostTypeForOptions === 'reel' ? 'reels' : 'posts';
-            db.collection(cName).doc(currentEditPostId).delete();
-            document.getElementById('post-options-modal').style.display = "none"; document.getElementById('single-post-modal').style.display = "none";
-        }
-    };
-    document.getElementById('update-post-btn').onclick = () => {
-        const newCaption = document.getElementById('edit-post-input').value;
-        if(currentEditPostId) {
-            const cName = activeCommentPostTypeForOptions === 'reel' ? 'reels' : 'posts';
-            db.collection(cName).doc(currentEditPostId).update({ caption: newCaption }).then(() => {
-                document.getElementById('edit-post-modal').style.display = "none"; currentEditPostId = null; document.getElementById('single-post-modal').style.display = "none";
-            });
-        }
-    };
-
-    // --- 7. DM'DEN PAYLAŞMA ---
-    window.openShareModal = (postId) => {
-        currentSharePostId = postId; document.getElementById('share-modal').style.display = "flex";
-    };
-
-    function renderShareUsersList() {
-        const wrap = document.getElementById('share-users-list'); wrap.innerHTML = ""; let userFound = false;
-        Object.keys(usersCache).forEach(uid => {
-            if(uid === currentUser.uid) return; userFound = true; const u = usersCache[uid];
-            wrap.insertAdjacentHTML('beforeend', `<div class="user-item" onclick="processPostShare('${uid}')"><img src="${u.avatar}"><div class="user-info"><span class="name">${u.name}</span><span class="username">@${u.username}</span></div><i class="fa-regular fa-paper-plane" style="margin-left:auto; color:var(--blue);"></i></div>`);
-        });
-        if(!userFound) { wrap.innerHTML = `<p style="text-align:center; color: var(--secondary-text); font-size:13px; padding:20px;">Paylaşacak kimse bulunamadı.</p>`; }
-    }
-
-    window.processPostShare = (receiverUid) => {
-        if(!currentSharePostId || !currentUser) return;
-        db.collection('posts').doc(currentSharePostId).get().then(doc => {
-            if(!doc.exists) return; const pData = doc.data(); const textSummary = pData.caption ? `"${pData.caption}"` : "Bir fotoğraf gönderisi";
-            const chatId = getChatRoomId(currentUser.uid, receiverUid);
-            db.collection('chats').doc(chatId).collection('messages').add({
-                senderId: currentUser.uid, text: `🔗 [Gönderi Paylaşıldı]: ${textSummary}`, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            }).then(() => { alert("Gönderi iletildi!"); document.getElementById('share-modal').style.display = "none"; currentSharePostId = null; });
-        });
-    };
-
-    // --- 8. REELS AKIŞI ---
-    function loadReelsFeed() {
-        db.collection('reels').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
-            const feed = document.getElementById('reels-feed'); feed.innerHTML = '';
-            
-            if(snapshot.empty) {
-                feed.insertAdjacentHTML('beforeend', `<div class="reel-item" onclick="togglePlay(this)"><video class="reel-media" src="https://files.catbox.moe/k3h5xw.mp4" loop playsinline autoplay muted></video><div class="reel-info"><div class="username">@swipper_official</div><div class="caption">Reels boş. Üst menüden ilk reelsi sen yükle!</div></div><div class="reel-actions"><i class="fa-solid fa-heart" onclick="event.stopPropagation(); this.classList.toggle('liked')"></i></div></div>`);
-                return;
-            }
-
-            snapshot.forEach(doc => {
-                const r = doc.data(); const uData = usersCache[r.authorId] || { username: "kullanici" };
-                const isMyReel = r.authorId === currentUser.uid;
-                const manageBtn = isMyReel ? `<i class="fa-solid fa-ellipsis-vertical" style="position:absolute; top:20px; right:20px; color:white; z-index:20; font-size:24px; cursor:pointer;" onclick="event.stopPropagation(); openPostOptions('${doc.id}', '${r.caption || ''}', 'reel')"></i>` : '';
-                
-                const mediaTag = (r.videoUrl.includes('.mp4') || r.videoUrl.includes('video') || r.videoUrl.includes('catbox.moe')) 
-                    ? `<video class="reel-media" src="${r.videoUrl}" loop playsinline></video>`
-                    : `<img class="reel-media" src="${r.videoUrl}">`;
-
-                feed.insertAdjacentHTML('beforeend', `
-                    <div class="reel-item" onclick="togglePlay(this)">
-                        ${manageBtn}
-                        ${mediaTag}
-                        <div class="reel-info"><div class="username">@${uData.username}</div><div class="caption">${r.caption}</div></div>
-                        <div class="reel-actions"><i class="fa-solid fa-heart" onclick="event.stopPropagation(); this.classList.toggle('liked')"></i></div>
-                    </div>
-                `);
-            });
-        });
-    }
-    window.togglePlay = (el) => { const v = el.querySelector('video'); if(v) { v.paused ? v.play() : v.pause(); } };
-
-    // --- 9. KEŞFET VE DM MOTORU ---
-    document.getElementById('search-input').oninput = function() {
-        const results = document.getElementById('search-results'); results.innerHTML = ""; const queryVal = this.value.toLowerCase();
-        Object.keys(usersCache).forEach(uid => {
-            if(uid === currentUser.uid) return; const u = usersCache[uid];
-            if(u.username.toLowerCase().includes(queryVal) || u.name.toLowerCase().includes(queryVal)) {
-                results.insertAdjacentHTML('beforeend', `<div class="user-item" onclick="openOtherProfile('${uid}')"><img src="${u.avatar}"><div class="user-info"><span class="name">${u.name}</span><span class="username">@${u.username}</span></div></div>`);
-            }
-        });
-    };
-
-    window.openOtherProfile = (uid) => {
-        const u = usersCache[uid]; if(!u) return;
-        document.getElementById('other-profile-username').innerText = `@${u.username}`; document.getElementById('other-profile-name').innerText = u.name;
-        document.getElementById('other-profile-bio').innerText = u.bio; document.getElementById('other-profile-pic').src = u.avatar;
-        document.getElementById('other-profile-msg-btn').onclick = () => { document.getElementById('nav-dm-btn').click(); setTimeout(() => openChatWith(uid), 100); };
-        
-        const grid = document.getElementById('other-profile-grid'); grid.innerHTML = ""; let count = 0;
-        db.collection("posts").where("authorId", "==", uid).get().then(snapshot => {
-            snapshot.forEach(doc => {
-                const p = doc.data();
-                if(p.imageUrl) { count++; postsCache[doc.id] = p; grid.insertAdjacentHTML('beforeend', `<div class="grid-item" onclick="openSinglePostModal('${doc.id}')"><img src="${p.imageUrl}"></div>`); }
-            });
-            document.getElementById('other-profile-post-count').innerText = count;
-        });
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active')); document.getElementById('other-profile-tab').classList.add('active'); window.scrollTo(0, 0);
-    };
-
-    function renderDMList() {
-        const list = document.getElementById('dm-list'); list.innerHTML = ""; let userFound = false;
-        Object.keys(usersCache).forEach(uid => {
-            if(uid === currentUser.uid) return; userFound = true; const u = usersCache[uid]; const chatId = getChatRoomId(currentUser.uid, uid);
-            list.insertAdjacentHTML('beforeend', `<div class="user-item" onclick="openChatWith('${uid}')"><img src="${u.avatar}"><div class="user-info"><span class="name">${u.name}</span><span class="msg-preview" id="preview-${uid}">Sohbet başlat...</span><span class="username">@${u.username}</span></div></div>`);
-            db.collection('chats').doc(chatId).collection('messages').orderBy('createdAt', 'desc').limit(1).onSnapshot(snap => {
-                if(!snap.empty) { const lMsg = snap.docs[0].data(); const pre = document.getElementById(`preview-${uid}`); if(pre) pre.innerText = (lMsg.senderId === currentUser.uid ? "Sen: " : "") + lMsg.text; }
-            });
-        });
-        if (!userFound) { list.innerHTML = `<div style="padding: 40px 20px; text-align: center; color: var(--secondary-text);"><i class="fa-regular fa-comments" style="font-size: 40px; margin-bottom: 10px; opacity: 0.5;"></i><p style="font-weight: 600; color: var(--text-color);">Mesaj Kutun Boş</p></div>`; }
-    }
-
-    window.openChatWith = (uid) => {
-        activeChatUserId = uid; activeChatId = getChatRoomId(currentUser.uid, uid); const u = usersCache[uid];
-        document.getElementById('dm-list-container').style.display = "none"; document.getElementById('dm-chat-container').style.display = "block";
-        document.getElementById('chat-user-avatar').src = u.avatar; document.getElementById('chat-user-username').innerText = u.username;
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active')); document.getElementById('dm-tab').classList.add('active');
-        loadLiveChatMessages();
-    };
-
-    document.getElementById('back-to-dm-list').onclick = () => {
-        activeChatUserId = null; activeChatId = null; document.getElementById('dm-chat-container').style.display = "none"; document.getElementById('dm-list-container').style.display = "block";
-    };
-
-    function sendChatMessage() {
-        const inputEl = document.getElementById('chat-message-input'); const text = inputEl.value;
-        if(text.trim() === "" || !activeChatId) return;
-        db.collection('chats').doc(activeChatId).collection('messages').add({ senderId: currentUser.uid, text: text, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).then(() => inputEl.value = "");
-    }
-    document.getElementById('send-message-btn').onclick = sendChatMessage;
-    document.getElementById('chat-message-input').addEventListener("keypress", function(e) { if (e.key === "Enter") { e.preventDefault(); sendChatMessage(); } });
-
-    function loadLiveChatMessages() {
-        if(!activeChatId) return;
-        db.collection('chats').doc(activeChatId).collection('messages').orderBy('createdAt', 'asc').onSnapshot(snapshot => {
-            const box = document.getElementById('chat-messages'); box.innerHTML = "";
-            snapshot.forEach(doc => { const m = doc.data(); const cls = m.senderId === currentUser.uid ? 'sent' : 'received'; box.insertAdjacentHTML('beforeend', `<div class="chat-msg ${cls}">${m.text}</div>`); });
-            setTimeout(() => box.scrollTop = box.scrollHeight, 100);
-        });
-    }
-
-    // --- 10. TEMA VE SEKMELER (SAYFA GEÇİŞİNDE VİDEOLARI SUSTURMA MANTIĞI) ---
-    document.getElementById('theme-toggle-btn').onclick = () => {
-        document.body.classList.toggle('dark-mode'); const icon = document.getElementById('theme-toggle-btn').querySelector('i');
-        if (document.body.classList.contains('dark-mode')) { icon.classList.remove('fa-moon'); icon.classList.add('fa-sun'); localStorage.setItem('swipper_theme', 'dark'); } 
-        else { icon.classList.remove('fa-sun'); icon.classList.add('fa-moon'); localStorage.setItem('swipper_theme', 'light'); }
-    };
-
-    const navItems = document.querySelectorAll('.nav-item');
-    navItems.forEach(item => {
-        item.addEventListener('click', (e) => {
-            if (item.id === 'nav-add-btn') return; 
-            e.preventDefault(); 
-            
-            // BAŞKA SEKMEYE GEÇİNCE TÜM VİDEOLARI DURDUR
-            document.querySelectorAll('video').forEach(video => {
-                if(!video.paused) { video.pause(); }
-            });
-
-            navItems.forEach(i => i.classList.remove('active')); item.classList.add('active');
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            const targetId = item.dataset.target; 
-            
-            if(targetId) {
-                document.getElementById(targetId).classList.add('active');
-                if(targetId === 'home-tab') { document.getElementById('main-top-header').style.display = "flex"; document.getElementById('main-content').style.marginTop = "60px"; } 
-                else { document.getElementById('main-top-header').style.display = "none"; document.getElementById('main-content').style.marginTop = "0px"; }
-            }
-            if(targetId === 'dm-tab') { document.getElementById('dm-chat-container').style.display = "none"; document.getElementById('dm-list-container').style.display = "block"; renderDMList(); }
-            window.scrollTo(0, 0);
-        });
-    });
-
-    document.querySelectorAll('.modal').forEach(modal => { modal.addEventListener('click', (e) => { if(e.target === modal) modal.style.display = "none"; }); });
-    document.querySelectorAll('.close-btn').forEach(btn => {
-        btn.onclick = (e) => {
-            if(e.target.id === 'close-story-viewer' || e.target.parentElement.id === 'close-story-viewer') closeStory();
-            else e.target.closest('.modal').style.display = "none";
-        };
-    });
-
-    document.getElementById('main-top-header').style.display = "flex";
-    document.getElementById('main-content').style.marginTop = "60px";
+    state.user = user;
+    try {
+      await ensureProfile(user);
+      $("auth-screen").hidden = true;
+      $("app-shell").hidden = false;
+      setSplashGone();
+      startRealtimeData();
+      showView("home");
+    } catch (error) { showAuthError(firebaseError(error, "Hesap hazırlanamadı.")); $("auth-screen").hidden = false; setSplashGone(); }
+  });
 });
+
