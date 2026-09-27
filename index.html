@@ -1,276 +1,117 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    
-    <title>Swipper</title>
-    
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    
-    <link rel="stylesheet" href="style.css?v=16">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#6d5dfc">
+  <meta name="description" content="Swipper — fotoğrafların, fikirlerin ve insanların buluştuğu sosyal alan.">
+  <title>Swipper — paylaş, keşfet, bağlan</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="style.css">
 </head>
-<body class="light-mode"> 
+<body>
+  <div id="splash-screen" class="splash-screen" aria-hidden="true">
+    <div class="brand brand--splash"><span class="brand-mark"><i class="fa-solid fa-sparkles"></i></span>swipper</div>
+  </div>
 
-    <div id="splash-screen">
-        <h1 class="insta-logo splash-logo">Swipper</h1>
+  <section id="auth-screen" class="auth-screen" aria-label="Giriş">
+    <div class="auth-art" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span></div>
+    <div class="auth-panel">
+      <a class="brand" href="#" aria-label="Swipper ana sayfa"><span class="brand-mark"><i class="fa-solid fa-sparkles"></i></span>swipper</a>
+      <div class="auth-copy"><span class="eyebrow">SOSYAL ALANIN</span><h1>Günün akışını<br><em>kendin yaz.</em></h1><p>Fotoğraflar, kısa notlar ve gerçek sohbetler tek bir yerde.</p></div>
+      <form id="auth-form" class="auth-form" novalidate>
+        <label>E-posta<input id="auth-email" type="email" autocomplete="email" placeholder="ornek@email.com" required></label>
+        <label>Şifre<input id="auth-password" type="password" autocomplete="current-password" placeholder="En az 6 karakter" required></label>
+        <p id="auth-error" class="form-error" role="alert"></p>
+        <button id="login-btn" class="button button--primary" type="submit">Giriş yap <i class="fa-solid fa-arrow-right"></i></button>
+        <div class="form-divider"><span>veya</span></div>
+        <button id="register-btn" class="button button--soft" type="button">Yeni hesap oluştur</button>
+      </form>
+      <p class="auth-footnote">Devam ederek topluluk kurallarını kabul etmiş olursun.</p>
     </div>
-
-    <div id="auth-screen" class="auth-container">
-        <div class="auth-box">
-            <h1 class="insta-logo" style="font-size: 56px; margin-bottom: 30px; text-align: center;">Swipper</h1>
-            <input type="email" id="auth-email" class="custom-input" placeholder="E-posta" style="margin-bottom:15px;">
-            <input type="password" id="auth-password" class="custom-input" placeholder="Şifre" style="margin-bottom: 20px;">
-            <button id="login-btn" class="primary-btn" style="width: 100%;">Giriş Yap</button>
-            <div class="divider"><span>veya</span></div>
-            <button id="register-btn" class="secondary-btn" style="width: 100%;">Yeni Hesap Oluştur</button>
-            <p id="auth-error" class="error-text"></p>
-        </div>
+    <div class="auth-preview" aria-hidden="true">
+      <div class="preview-card preview-card--one"><span class="preview-avatar avatar avatar--coral">E</span><div><b>elifnotlar</b><p>Bugün iyi bir fikir yakaladım.</p><span><i class="fa-solid fa-heart"></i> 24</span></div></div>
+      <div class="preview-card preview-card--two"><span class="preview-burst">✦</span><p>Fikirler<br>paylaştıkça<br>büyür.</p></div>
+      <div class="preview-card preview-card--three"><span class="avatar avatar--mint">A</span><div class="preview-lines"><i></i><i></i><i></i></div></div>
     </div>
+  </section>
 
-    <div id="app-container" style="display: none;">
-        
-        <header class="top-header" id="main-top-header">
-            <h1 class="insta-logo">Swipper</h1>
-            <div class="header-icons">
-                <button class="icon-btn" id="header-add-btn"><i class="fa-regular fa-square-plus"></i></button>
-                <button class="icon-btn"><i class="fa-regular fa-heart"></i></button>
-            </div>
-        </header>
+  <div id="app-shell" class="app-shell" hidden>
+    <aside class="sidebar" aria-label="Ana menü">
+      <a class="brand" href="#home" aria-label="Swipper"><span class="brand-mark"><i class="fa-solid fa-sparkles"></i></span>swipper</a>
+      <nav id="side-nav" class="main-nav">
+        <button class="nav-link is-active" data-view="home" type="button"><i class="fa-solid fa-house"></i><span>Ana akış</span></button>
+        <button class="nav-link" data-view="explore" type="button"><i class="fa-solid fa-compass"></i><span>Keşfet</span></button>
+        <button class="nav-link" data-view="messages" type="button"><i class="fa-regular fa-paper-plane"></i><span>Mesajlar</span><b id="message-badge" hidden>0</b></button>
+        <button class="nav-link" data-view="profile" type="button"><i class="fa-regular fa-user"></i><span>Profil</span></button>
+      </nav>
+      <button id="open-composer-side" class="button button--primary button--compose" type="button"><i class="fa-solid fa-plus"></i>Paylaş</button>
+      <div class="sidebar-bottom">
+        <button id="theme-toggle" class="nav-link nav-link--quiet" type="button"><i class="fa-regular fa-moon"></i><span>Tema</span></button>
+        <button id="logout-btn" class="nav-link nav-link--quiet" type="button"><i class="fa-solid fa-arrow-right-from-bracket"></i><span>Çıkış yap</span></button>
+        <button id="side-user" class="side-user" type="button" data-view="profile"><img id="side-user-avatar" alt=""><span><b id="side-user-name">Yükleniyor</b><small id="side-user-handle">@...</small></span><i class="fa-solid fa-ellipsis"></i></button>
+      </div>
+    </aside>
 
-        <main id="main-content">
-            
-            <section id="home-tab" class="tab-content active">
-                <div class="stories-container" id="stories-wrapper">
-                    <div class="story create-story" id="add-story-btn">
-                        <div class="story-ring"><img src="https://i.pravatar.cc/150?img=11" id="my-story-img" alt="Sen"></div>
-                        <span class="plus-icon"><i class="fa-solid fa-plus"></i></span>
-                        <span>Hikayen</span>
-                    </div>
-                </div>
-                <div id="feed-container"></div>
-            </section>
+    <main class="main-area">
+      <header class="mobile-header"><a class="brand" href="#home"><span class="brand-mark"><i class="fa-solid fa-sparkles"></i></span>swipper</a><button id="mobile-compose" class="icon-button icon-button--brand" type="button" aria-label="Paylaş"><i class="fa-solid fa-plus"></i></button></header>
 
-            <section id="explore-tab" class="tab-content">
-                <div class="search-bar-container">
-                    <div class="search-bar">
-                        <i class="fa-solid fa-magnifying-glass"></i>
-                        <input type="text" id="search-input" placeholder="Kullanıcı ara...">
-                    </div>
-                </div>
-                <div id="search-results" class="user-list"></div>
-            </section>
+      <section id="view-home" class="view is-active" aria-labelledby="home-title">
+        <div class="view-heading"><div><span class="eyebrow">GÜNÜN AKIŞI</span><h2 id="home-title">Sana özel</h2></div><button id="refresh-feed" class="icon-button" type="button" aria-label="Akışı yenile"><i class="fa-solid fa-rotate-right"></i></button></div>
+        <div id="stories" class="stories" aria-label="Hikayeler"></div>
+        <div class="feed-switch" role="tablist" aria-label="Akış tercihi"><button class="feed-tab is-active" type="button" data-feed="all">Sana özel</button><button class="feed-tab" type="button" data-feed="following">Takip ettiklerin</button></div>
+        <button id="open-composer" class="quick-composer" type="button"><img id="quick-avatar" alt=""><span>Aklından ne geçiyor?</span><i class="fa-regular fa-image"></i></button>
+        <div id="feed" class="feed" aria-live="polite"></div>
+        <div id="empty-feed" class="empty-state" hidden><span class="empty-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></span><h3>Akışı birlikte canlandıralım</h3><p>İlk notunu, fotoğrafını ya da anını paylaş.</p><button class="button button--primary open-composer-trigger" type="button">Bir şey paylaş</button></div>
+      </section>
 
-            <section id="reels-tab" class="tab-content" style="padding: 0; margin-top: -60px;">
-                <div class="reels-feed" id="reels-feed"></div>
-            </section>
+      <section id="view-explore" class="view" aria-labelledby="explore-title">
+        <div class="view-heading"><div><span class="eyebrow">YENİ BAĞLANTILAR</span><h2 id="explore-title">Keşfet</h2></div></div>
+        <label class="search-field"><i class="fa-solid fa-magnifying-glass"></i><input id="user-search" type="search" placeholder="İsim veya kullanıcı adı ara" autocomplete="off"><button id="clear-search" type="button" aria-label="Aramayı temizle" hidden><i class="fa-solid fa-xmark"></i></button></label>
+        <div id="explore-users" class="user-grid"></div>
+      </section>
 
-            <section id="dm-tab" class="tab-content">
-                <div id="dm-list-container">
-                    <div class="dm-header"><h3>Mesajlar</h3></div>
-                    <div id="dm-list" class="user-list"></div>
-                </div>
-                
-                <div id="dm-chat-container" style="display: none;">
-                    <div class="chat-header">
-                        <button id="back-to-dm-list" class="icon-btn"><i class="fa-solid fa-arrow-left"></i></button>
-                        <img id="chat-user-avatar" src="" class="post-avatar" style="margin-left: 10px;">
-                        <span id="chat-user-username" class="post-author"></span>
-                    </div>
-                    <div id="chat-messages" class="chat-messages-box"></div>
-                    <div class="chat-input-container">
-                        <input type="text" id="chat-message-input" placeholder="Mesaj yaz...">
-                        <button id="send-message-btn" class="icon-btn"><i class="fa-solid fa-paper-plane" style="color: var(--blue);"></i></button>
-                    </div>
-                </div>
-            </section>
-
-            <section id="profile-tab" class="tab-content">
-                <div class="profile-top-bar">
-                    <span class="profile-username" id="display-username">@yukleniyor</span>
-                    <button class="icon-btn" id="logout-btn"><i class="fa-solid fa-right-from-bracket" style="color: #ed4956; font-size: 18px;"></i></button>
-                </div>
-                
-                <div class="profile-header">
-                    <div class="avatar-container" id="avatar-container">
-                        <img src="" class="profile-avatar" id="main-profile-pic">
-                        <div class="avatar-overlay"><i class="fa-solid fa-camera"></i></div>
-                    </div>
-                    <div class="profile-stats">
-                        <div class="stat"><strong id="post-count">0</strong><span>Gönderi</span></div>
-                        <div class="stat"><strong id="follower-count">0</strong><span>Takipçi</span></div>
-                        <div class="stat"><strong id="following-count">0</strong><span>Takip</span></div>
-                    </div>
-                </div>
-                
-                <div class="profile-bio-section">
-                    <strong class="profile-name" id="display-name">Yükleniyor...</strong>
-                    <p class="profile-bio-text" id="display-bio">Biyografi yükleniyor...</p>
-                </div>
-                
-                <div class="profile-actions">
-                    <button class="edit-profile-btn" id="edit-profile-trigger">Profili Düzenle</button>
-                    <button class="edit-profile-btn" id="theme-toggle-btn"><i class="fa-regular fa-moon"></i> Tema</button>
-                </div>
-
-                <div class="profile-tabs">
-                    <div class="p-tab active" data-target="p-grid"><i class="fa-solid fa-table-cells"></i></div>
-                    <div class="p-tab" data-target="p-tweets"><i class="fa-solid fa-bars-staggered"></i></div>
-                </div>
-                
-                <div id="p-grid" class="profile-tab-content active"></div>
-                <div id="p-tweets" class="profile-tab-content"></div>
-            </section>
-
-            <section id="other-profile-tab" class="tab-content">
-                <div class="profile-top-bar">
-                    <button class="icon-btn" onclick="document.getElementById('nav-explore-btn').click()"><i class="fa-solid fa-arrow-left"></i></button>
-                    <span class="profile-username" id="other-profile-username">@kullanici</span>
-                    <div style="width: 24px;"></div>
-                </div>
-                <div class="profile-header">
-                    <div class="avatar-container"><img src="" class="profile-avatar" id="other-profile-pic"></div>
-                    <div class="profile-stats">
-                        <div class="stat"><strong id="other-profile-post-count">0</strong><span>Gönderi</span></div>
-                        <div class="stat"><strong>0</strong><span>Takipçi</span></div>
-                        <div class="stat"><strong>0</strong><span>Takip</span></div>
-                    </div>
-                </div>
-                <div class="profile-bio-section">
-                    <strong class="profile-name" id="other-profile-name">İsim Yükleniyor...</strong>
-                    <p class="profile-bio-text" id="other-profile-bio">Biyografi yükleniyor...</p>
-                </div>
-                <div class="profile-actions">
-                    <button class="primary-btn" id="other-profile-msg-btn" style="width: 100%;">Mesaj Gönder</button>
-                </div>
-                <div class="profile-tabs"><div class="p-tab active"><i class="fa-solid fa-table-cells"></i></div></div>
-                <div class="profile-grid" id="other-profile-grid"></div>
-            </section>
-        </main>
-
-        <nav class="bottom-nav">
-            <a href="#" class="nav-item active" data-target="home-tab"><i class="fa-solid fa-house"></i></a>
-            <a href="#" class="nav-item" data-target="explore-tab" id="nav-explore-btn"><i class="fa-solid fa-magnifying-glass"></i></a>
-            <a href="#" class="nav-item" data-target="reels-tab"><i class="fa-solid fa-clapperboard"></i></a>
-            <a href="#" class="nav-item" data-target="dm-tab" id="nav-dm-btn"><i class="fa-brands fa-facebook-messenger"></i></a>
-            <a href="#" class="nav-item" data-target="profile-tab"><img src="" class="nav-profile-pic" id="nav-profile-img"></a>
-        </nav>
-    </div>
-
-    <div id="single-post-modal" class="modal">
-        <div class="modal-content" style="padding: 0; overflow: hidden; background: var(--bg-color);">
-            <div class="modal-header" style="padding: 15px; border-bottom: 1px solid var(--border-color);">
-                <h3 class="insta-logo" style="font-size: 24px;">Gönderi</h3>
-                <button class="close-btn"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div id="single-post-container" style="max-height: 80vh; overflow-y: auto;"></div>
+      <section id="view-messages" class="view" aria-labelledby="messages-title">
+        <div class="messages-layout">
+          <div id="conversation-list-pane" class="conversation-list-pane"><div class="view-heading"><div><span class="eyebrow">SOHBETLER</span><h2 id="messages-title">Mesajlar</h2></div><button id="new-message" class="icon-button" type="button" aria-label="Yeni mesaj"><i class="fa-solid fa-pen-to-square"></i></button></div><div id="conversation-list" class="conversation-list"></div></div>
+          <div id="chat-pane" class="chat-pane"><div id="chat-placeholder" class="empty-state empty-state--chat"><span class="empty-icon"><i class="fa-regular fa-paper-plane"></i></span><h3>Bir sohbet seç</h3><p>Bir fikri, anı ya da selamı paylaş.</p></div><div id="chat-content" hidden><header class="chat-header"><button id="back-to-conversations" class="icon-button mobile-only" type="button" aria-label="Geri"><i class="fa-solid fa-arrow-left"></i></button><button id="chat-user-button" class="chat-person" type="button"><img id="chat-user-avatar" alt=""><span><b id="chat-user-name"></b><small id="chat-user-handle"></small></span></button></header><div id="chat-messages" class="chat-messages"></div><form id="chat-form" class="chat-form"><input id="chat-input" maxlength="800" placeholder="Mesaj yaz…" autocomplete="off"><button class="icon-button icon-button--brand" type="submit" aria-label="Gönder"><i class="fa-solid fa-arrow-up"></i></button></form></div></div>
         </div>
-    </div>
+      </section>
 
-    <div id="story-viewer-modal" class="modal" style="background: #000; z-index: 3000;">
-        <div class="story-viewer-header" style="position: absolute; top: 20px; left: 0; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; z-index: 3001;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <img id="story-viewer-avatar" src="" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;">
-                <span id="story-viewer-username" style="color: white; font-weight: 600; font-size: 14px;"></span>
-            </div>
-            <button class="close-btn" id="close-story-viewer" style="color: white; font-size: 28px; background:none; border:none;">&times;</button>
-        </div>
-        <div style="position: absolute; top: 10px; left: 10px; right: 10px; height: 3px; background: rgba(255,255,255,0.3); border-radius: 3px; z-index: 3001;">
-            <div id="story-progress-bar" style="height: 100%; background: white; width: 0%; border-radius: 3px;"></div>
-        </div>
-        <img id="story-viewer-img" src="" style="width: 100%; height: 100%; object-fit: contain;">
-        
-        <div class="story-reply-container" style="position: absolute; bottom: 20px; left: 15px; right: 15px; display: flex; gap: 10px; z-index: 3001;">
-            <input type="text" id="story-reply-input" placeholder="Mesaj gönder..." style="flex: 1; padding: 12px 20px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: white; outline: none;">
-            <button id="send-story-reply" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer;"><i class="fa-solid fa-paper-plane"></i></button>
-        </div>
-    </div>
+      <section id="view-profile" class="view" aria-labelledby="profile-title"><div id="profile-content"></div></section>
+    </main>
 
-    <div id="comments-modal" class="modal">
-        <div class="modal-content bottom-sheet" style="height: 70vh; padding: 0; display: flex; flex-direction: column;">
-            <div class="modal-drag-handle" style="margin-top: 15px;"></div>
-            <div class="modal-header" style="padding: 0 15px 15px 15px; border-bottom: 1px solid var(--border-color); text-align: center;">
-                <h3 style="width: 100%; text-align: center;">Yorumlar</h3>
-            </div>
-            <div id="comments-list" style="flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 15px;"></div>
-            <div class="chat-input-container" style="position: relative; bottom: 0; border-radius: 0 0 16px 16px;">
-                <input type="text" id="comment-input" placeholder="Yorum ekle...">
-                <button id="send-comment-btn" class="icon-btn"><i class="fa-solid fa-paper-plane" style="color: var(--blue);"></i></button>
-            </div>
-        </div>
-    </div>
+    <aside class="right-rail">
+      <section class="rail-card rail-card--gradient"><span class="rail-star">✦</span><span class="eyebrow">SWIPPER'DA YENİSİN</span><h3>İyi sohbetler<br>buradan başlar.</h3><p>İnsanları keşfet, bir merhaba bırak.</p><button class="rail-link" type="button" data-view="explore">Kişileri keşfet <i class="fa-solid fa-arrow-right"></i></button></section>
+      <section class="rail-section"><div class="rail-section-title"><h3>Gündem</h3><button type="button" data-view="explore">Tümü</button></div><div class="trend"><span>TEKNOLOJİ</span><b>Yapay zeka ve tasarım</b><small>1.2B paylaşım</small></div><div class="trend"><span>YAŞAM</span><b>Pazar gününün ritmi</b><small>842 paylaşım</small></div><div class="trend"><span>GÜNDEM</span><b>#haftasonu</b><small>396 paylaşım</small></div></section>
+      <p class="rail-footer">Swipper · Topluluk · Gizlilik · Yardım<br>© 2026 Swipper</p>
+    </aside>
 
-    <div id="edit-profile-modal" class="modal">
-        <div class="modal-content bottom-sheet">
-            <div class="modal-header"><h3>Profili Düzenle</h3><button class="close-btn"><i class="fa-solid fa-xmark"></i></button></div>
-            <div class="input-group"><label>Ad Soyad</label><input type="text" id="input-name" class="custom-input"></div>
-            <div class="input-group"><label>Kullanıcı Adı</label><input type="text" id="input-username" class="custom-input"></div>
-            <div class="input-group"><label>Biyografi</label><textarea id="input-bio" class="custom-textarea" style="height: 60px;"></textarea></div>
-            <button id="save-profile-btn" class="primary-btn">Kaydet</button>
-        </div>
-    </div>
+    <nav class="bottom-nav" aria-label="Mobil menü"><button class="nav-link is-active" data-view="home" type="button" aria-label="Ana akış"><i class="fa-solid fa-house"></i></button><button class="nav-link" data-view="explore" type="button" aria-label="Keşfet"><i class="fa-solid fa-compass"></i></button><button id="bottom-compose" class="bottom-compose" type="button" aria-label="Paylaş"><i class="fa-solid fa-plus"></i></button><button class="nav-link" data-view="messages" type="button" aria-label="Mesajlar"><i class="fa-regular fa-paper-plane"></i></button><button class="nav-link" data-view="profile" type="button" aria-label="Profil"><img id="bottom-avatar" alt=""></button></nav>
+  </div>
 
-    <div id="create-options-modal" class="modal">
-        <div class="modal-content bottom-sheet" style="padding: 10px 0;">
-            <div class="modal-drag-handle"></div>
-            <div class="create-option" id="btn-create-post"><i class="fa-solid fa-table-cells"></i><span>Gönderi veya Tweet Paylaş</span></div>
-            <div class="create-option" id="btn-create-reel"><i class="fa-solid fa-clapperboard"></i><span>Reels Videosu Yükle</span></div>
-            <div class="create-option" id="btn-create-story-menu"><i class="fa-solid fa-circle-plus"></i><span>Hikaye Paylaş</span></div>
-        </div>
-    </div>
+  <div id="modal-layer" class="modal-layer" hidden>
+    <section id="composer-modal" class="modal modal--composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" hidden><header class="modal-header"><div><span class="eyebrow">YENİ PAYLAŞIM</span><h2 id="composer-title">Aklındakini bırak</h2></div><button class="icon-button close-modal" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></header><form id="composer-form"><div class="composer-user"><img id="composer-avatar" alt=""><span><b id="composer-name"></b><small id="composer-handle"></small></span></div><textarea id="post-text" maxlength="1200" placeholder="Bugün neyi paylaşmak istiyorsun?" autofocus></textarea><div id="media-preview" class="media-preview" hidden></div><div class="composer-tools"><label class="file-button"><i class="fa-regular fa-image"></i><span>Fotoğraf veya video</span><input id="media-input" type="file" accept="image/*,video/*"></label><span id="char-count">0/1200</span></div><p id="upload-status" class="upload-status" role="status"></p><footer class="modal-footer"><button class="button button--soft close-modal" type="button">Vazgeç</button><button id="publish-btn" class="button button--primary" type="submit">Paylaş <i class="fa-solid fa-arrow-up"></i></button></footer></form></section>
 
-    <div id="post-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header"><h3 id="upload-modal-title">Yeni Paylaşım</h3><button class="close-btn" id="close-post"><i class="fa-solid fa-xmark"></i></button></div>
-            <textarea id="post-content-input" class="custom-textarea" placeholder="Neler düşünüyorsun?" style="height: 80px; border: none; border-bottom: 1px solid var(--border-color); font-size: 16px;"></textarea>
-            
-            <div class="image-upload-preview" id="post-image-preview" style="display: none; position: relative;">
-                <div id="media-preview-container"></div>
-                <button id="remove-post-image" style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            
-            <button id="select-post-image" class="secondary-btn" style="margin-top: 10px;"><i class="fa-solid fa-photo-film"></i> Galeriden Seç</button>
-            
-            <p id="upload-loading-text" style="display:none; text-align:center; color:var(--blue); font-size:14px; font-weight:600; margin-top:10px;"><i class="fa-solid fa-spinner fa-spin"></i> Dosya Optimize Ediliyor ve Yükleniyor...</p>
-            
-            <button id="save-post-btn" class="primary-btn" style="margin-top: 10px;">Paylaş</button>
-        </div>
-    </div>
+    <section id="comments-modal" class="modal modal--comments" role="dialog" aria-modal="true" aria-labelledby="comments-title" hidden><header class="modal-header"><div><span class="eyebrow">SOHBETE KATIL</span><h2 id="comments-title">Yorumlar</h2></div><button class="icon-button close-modal" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></header><div id="comments-list" class="comments-list"></div><form id="comment-form" class="comment-form"><input id="comment-input" maxlength="500" placeholder="Düşünceni yaz…" autocomplete="off"><button class="icon-button icon-button--brand" type="submit" aria-label="Yorum gönder"><i class="fa-solid fa-arrow-up"></i></button></form></section>
 
-    <div id="post-options-modal" class="modal">
-        <div class="modal-content bottom-sheet" style="padding: 0;">
-            <div class="modal-drag-handle" style="margin-top: 15px;"></div>
-            <div class="create-option" id="opt-edit-post"><i class="fa-solid fa-pen"></i><span>Düzenle</span></div>
-            <div class="create-option" id="opt-del-post" style="color: #ed4956; border-bottom:none;"><i class="fa-solid fa-trash" style="color: #ed4956;"></i><span>Sil</span></div>
-        </div>
-    </div>
+    <section id="profile-modal" class="modal modal--profile" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title" hidden><header class="modal-header"><div><span class="eyebrow">PROFİL</span><h2 id="profile-modal-title">Profili düzenle</h2></div><button class="icon-button close-modal" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></header><form id="profile-form" class="profile-form"><label>Görünen ad<input id="profile-name-input" maxlength="48" required></label><label>Kullanıcı adı<div class="handle-input"><span>@</span><input id="profile-handle-input" maxlength="24" pattern="[a-zA-Z0-9_]+" required></div></label><label>Kendinden bahset<textarea id="profile-bio-input" maxlength="180" placeholder="Birkaç kelimeyle kendini anlat."></textarea></label><p id="profile-error" class="form-error"></p><footer class="modal-footer"><button class="button button--soft close-modal" type="button">Vazgeç</button><button class="button button--primary" type="submit">Kaydet</button></footer></form></section>
 
-    <div id="edit-post-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header"><h3>Gönderiyi Düzenle</h3><button class="close-btn"><i class="fa-solid fa-xmark"></i></button></div>
-            <textarea id="edit-post-input" class="custom-textarea" style="height: 100px; font-size: 15px;"></textarea>
-            <button id="update-post-btn" class="primary-btn">Değişiklikleri Kaydet</button>
-        </div>
-    </div>
+    <section id="user-modal" class="modal modal--user" role="dialog" aria-modal="true" aria-labelledby="user-modal-title" hidden><button class="icon-button close-modal user-close" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button><div id="user-modal-content"></div></section>
 
-    <div id="share-modal" class="modal">
-        <div class="modal-content bottom-sheet">
-            <div class="modal-header"><h3>Gönderiyi Paylaş</h3><button class="close-btn"><i class="fa-solid fa-xmark"></i></button></div>
-            <div id="share-users-list" class="user-list" style="max-height: 250px; overflow-y: auto;"></div>
-        </div>
-    </div>
+    <section id="story-modal" class="modal modal--story" role="dialog" aria-modal="true" aria-label="Hikaye" hidden><button class="icon-button close-modal story-close" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button><div id="story-content"></div></section>
 
-    <input type="file" id="global-media-upload" accept="image/*,video/*" style="display: none;">
-    <input type="file" id="story-image-upload" accept="image/*" style="display: none;">
-    <input type="file" id="profile-upload" accept="image/*" style="display: none;">
+    <section id="new-message-modal" class="modal modal--new-message" role="dialog" aria-modal="true" aria-labelledby="new-message-title" hidden><header class="modal-header"><div><span class="eyebrow">SOHBET BAŞLAT</span><h2 id="new-message-title">Kime yazalım?</h2></div><button class="icon-button close-modal" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></header><div id="message-user-list" class="message-user-list"></div></section>
+  </div>
 
-    <script src="app.js"></script>
+  <input id="story-input" type="file" accept="image/*" hidden>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
+
