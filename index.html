@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#6d5dfc">
   <meta name="description" content="Swipper — fotoğrafların, fikirlerin ve insanların buluştuğu sosyal alan.">
   <title>Swipper — paylaş, keşfet, bağlan</title>
@@ -71,6 +71,8 @@
       <section id="view-explore" class="view" aria-labelledby="explore-title">
         <div class="view-heading"><div><span class="eyebrow">YENİ BAĞLANTILAR</span><h2 id="explore-title">Keşfet</h2></div></div>
         <label class="search-field"><i class="fa-solid fa-magnifying-glass"></i><input id="user-search" type="search" placeholder="İsim veya kullanıcı adı ara" autocomplete="off"><button id="clear-search" type="button" aria-label="Aramayı temizle" hidden><i class="fa-solid fa-xmark"></i></button></label>
+        <div id="explore-gallery" class="explore-gallery" aria-label="Popüler görsel paylaşımlar"></div>
+        <div class="explore-people-heading"><div><span class="eyebrow">TOPLULUK</span><h3>Kişileri keşfet</h3></div><span id="explore-people-count"></span></div>
         <div id="explore-users" class="user-grid"></div>
       </section>
 
@@ -101,6 +103,8 @@
     <section id="profile-modal" class="modal modal--profile" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title" hidden><header class="modal-header"><div><span class="eyebrow">PROFİL</span><h2 id="profile-modal-title">Profili düzenle</h2></div><button class="icon-button close-modal" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></header><form id="profile-form" class="profile-form"><label>Görünen ad<input id="profile-name-input" maxlength="48" required></label><label>Kullanıcı adı<div class="handle-input"><span>@</span><input id="profile-handle-input" maxlength="24" pattern="[a-zA-Z0-9_]+" required></div></label><label>Kendinden bahset<textarea id="profile-bio-input" maxlength="180" placeholder="Birkaç kelimeyle kendini anlat."></textarea></label><p id="profile-error" class="form-error"></p><footer class="modal-footer"><button class="button button--soft close-modal" type="button">Vazgeç</button><button class="button button--primary" type="submit">Kaydet</button></footer></form></section>
 
     <section id="user-modal" class="modal modal--user" role="dialog" aria-modal="true" aria-labelledby="user-modal-title" hidden><button class="icon-button close-modal user-close" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button><div id="user-modal-content"></div></section>
+
+    <section id="post-modal" class="modal modal--post" role="dialog" aria-modal="true" aria-labelledby="post-modal-title" hidden><header class="modal-header"><div><span class="eyebrow">PAYLAŞIM</span><h2 id="post-modal-title">Akıştan bir an</h2></div><button class="icon-button close-modal" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></header><div id="post-modal-content" class="post-modal-content"></div></section>
 
     <section id="story-modal" class="modal modal--story" role="dialog" aria-modal="true" aria-label="Hikaye" hidden><button class="icon-button close-modal story-close" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button><div id="story-content"></div></section>
 
