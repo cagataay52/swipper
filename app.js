@@ -32,6 +32,15 @@ document.addEventListener("DOMContentLoaded", () => {
     postListenerStarted: false
   };
 
+  // Mobil tarayıcılarda çift dokunuşla oluşan sayfa yakınlaştırmasını engeller.
+  let lastTouchEnd = 0;
+  document.addEventListener("touchend", (event) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) event.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
+  document.addEventListener("dblclick", (event) => event.preventDefault(), { passive: false });
+
   const escapeHTML = (value = "") => String(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -194,9 +203,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const query = $("user-search").value.trim().toLocaleLowerCase("tr-TR");
     $("clear-search").hidden = !query;
     const following = Array.isArray(currentProfile().following) ? currentProfile().following : [];
+    const photoPosts = state.posts.filter((post) => postMedia(post)).slice(0, 24);
+    $("explore-gallery").innerHTML = photoPosts.length ? photoPosts.map((post) => {
+      const media = postMedia(post);
+      const likes = Array.isArray(post.likes) ? post.likes.length : 0;
+      const visual = isVideo(post)
+        ? `<video src="${escapeHTML(media)}" muted playsinline preload="metadata"></video>`
+        : `<img src="${escapeHTML(media)}" alt="Keşfet paylaşımı" loading="lazy">`;
+      return `<button class="explore-tile" type="button" data-open-post="${escapeHTML(post.id)}">${visual}<span class="explore-tile-badge"><i class="${isVideo(post) ? "fa-solid fa-play" : "fa-regular fa-heart"}"></i>${likes || ""}</span></button>`;
+    }).join("") : `<div class="explore-gallery-empty"><span><i class="fa-regular fa-image"></i> Fotoğraf paylaşıldığında burada Instagram tarzı bir keşfet akışı oluşacak.</span></div>`;
     const people = Object.entries(state.users)
       .filter(([uid, person]) => uid !== state.user?.uid && `${person.name || ""} ${person.username || ""}`.toLocaleLowerCase("tr-TR").includes(query))
       .sort(([, a], [, b]) => String(a.username || "").localeCompare(String(b.username || ""), "tr"));
+    $("explore-people-count").textContent = people.length ? `${people.length} kişi` : "";
     $("explore-users").innerHTML = people.length ? people.map(([uid, person]) => `<article class="user-card">
       <button class="user-card-top" type="button" data-user-id="${escapeHTML(uid)}"><img src="${escapeHTML(avatarFor(person))}" alt=""><span class="user-card-info"><b>${escapeHTML(person.name || person.username || "Swipper üyesi")}</b><span>@${escapeHTML(person.username || "uye")}</span></span></button>
       <p>${escapeHTML(person.bio || "Swipper'da yeni fikirler keşfediyor.")}</p>
@@ -232,6 +251,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!profile) return;
     $("user-modal-content").innerHTML = `<div class="user-profile">${profileMarkup(profile, uid, uid === state.user?.uid)}</div>`;
     openModal("user-modal");
+  }
+
+  function openPostDetail(id) {
+    const post = state.posts.find((item) => item.id === id);
+    if (!post) return;
+    const author = state.users[post.authorId] || { name: "Swipper üyesi" };
+    $("post-modal-title").textContent = author.name || author.username || "Akıştan bir an";
+    $("post-modal-content").innerHTML = postMarkup(post);
+    openModal("post-modal");
   }
 
   function renderConversationList() {
@@ -550,7 +578,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     const openPost = event.target.closest("[data-open-post]");
-    if (openPost) { const post = state.posts.find((item) => item.id === openPost.dataset.openPost); if (post) openComments(post.id); return; }
+    if (openPost) { openPostDetail(openPost.dataset.openPost); return; }
     const storyButton = event.target.closest("[data-story-id]");
     if (storyButton) { openStory(storyButton.dataset.storyId); return; }
     if (event.target.closest("[data-story-action='add']")) { $("story-input").click(); return; }
