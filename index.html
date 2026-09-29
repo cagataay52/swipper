@@ -17,7 +17,6 @@
     <div class="brand brand--splash"><span class="brand-mark"><i class="fa-solid fa-sparkles"></i></span>swipper</div>
   </div>
 
-  <!-- UYGULAMA İÇİ BİLDİRİMLER (TOAST) -->
   <div id="toast-container" class="toast-container"></div>
 
   <section id="auth-screen" class="auth-screen" aria-label="Giriş">
@@ -60,7 +59,14 @@
     </aside>
 
     <main class="main-area">
-      <header class="mobile-header"><a class="brand" href="#home"><span class="brand-mark"><i class="fa-solid fa-sparkles"></i></span>swipper</a><button id="mobile-compose" class="icon-button icon-button--brand" type="button" aria-label="Paylaş"><i class="fa-solid fa-plus"></i></button></header>
+      <!-- MOBİL HEADER'A TEMA BUTONU EKLENDİ -->
+      <header class="mobile-header">
+        <a class="brand" href="#home"><span class="brand-mark"><i class="fa-solid fa-sparkles"></i></span>swipper</a>
+        <div style="display: flex; gap: 8px;">
+          <button id="mobile-theme-toggle" class="icon-button" type="button" aria-label="Tema"><i class="fa-regular fa-moon"></i></button>
+          <button id="mobile-compose" class="icon-button icon-button--brand" type="button" aria-label="Paylaş"><i class="fa-solid fa-plus"></i></button>
+        </div>
+      </header>
 
       <section id="view-home" class="view is-active" aria-labelledby="home-title">
         <div class="view-heading"><div><span class="eyebrow">GÜNÜN AKIŞI</span><h2 id="home-title">Sana özel</h2></div><button id="refresh-feed" class="icon-button" type="button" aria-label="Akışı yenile"><i class="fa-solid fa-rotate-right"></i></button></div>
@@ -99,7 +105,7 @@
   </div>
 
   <div id="modal-layer" class="modal-layer" hidden>
-    <section id="composer-modal" class="modal modal--composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" hidden><header class="modal-header"><div><span class="eyebrow">YENİ PAYLAŞIM</span><h2 id="composer-title">Aklındakini bırak</h2></div><button class="icon-button close-modal" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></header><form id="composer-form"><div class="composer-user"><img id="composer-avatar" alt=""><span><b id="composer-name"></b><small id="composer-handle"></small></span></div><textarea id="post-text" maxlength="1200" placeholder="Bugün neyi paylaşmak istiyorsun?" autofocus></textarea><div id="media-preview" class="media-preview" hidden></div><div class="composer-tools"><label class="file-button"><i class="fa-regular fa-image"></i><span>Fotoğraf veya video</span><input id="media-input" type="file" accept="image/*,video/*"></label><span id="char-count">0/1200</span></div><p id="upload-status" class="upload-status" role="status"></p><footer class="modal-footer"><button class="button button--soft close-modal" type="button">Vazgeç</button><button id="publish-btn" class="button button--primary" type="submit">Paylaş <i class="fa-solid fa-arrow-up"></i></button></footer></form></section>
+    <section id="composer-modal" class="modal modal--composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" hidden><header class="modal-header"><div><span class="eyebrow">YENİ PAYLAŞIM</span><h2 id="composer-title">Aklındakini bırak</h2></div><button class="icon-button close-modal" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></header><form id="composer-form"><div class="composer-user"><img id="composer-avatar" alt=""><span><b id="composer-name"></b><small id="composer-handle"></small></span></div><textarea id="post-text" maxlength="1200" placeholder="Bugün neyi paylaşmak istiyorsun?" autofocus></textarea><div id="media-preview" class="media-preview" hidden></div><div class="composer-tools"><label class="file-button"><i class="fa-regular fa-image"></i><span>Fotoğraf ekle</span><input id="media-input" type="file" accept="image/*"></label><span id="char-count">0/1200</span></div><p id="upload-status" class="upload-status" role="status"></p><footer class="modal-footer"><button class="button button--soft close-modal" type="button">Vazgeç</button><button id="publish-btn" class="button button--primary" type="submit">Paylaş <i class="fa-solid fa-arrow-up"></i></button></footer></form></section>
 
     <section id="comments-modal" class="modal modal--comments" role="dialog" aria-modal="true" aria-labelledby="comments-title" hidden><header class="modal-header"><div><span class="eyebrow">SOHBETE KATIL</span><h2 id="comments-title">Yorumlar</h2></div><button class="icon-button close-modal" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></header><div id="comments-list" class="comments-list"></div><form id="comment-form" class="comment-form"><input id="comment-input" maxlength="500" placeholder="Düşünceni yaz…" autocomplete="off"><button class="icon-button icon-button--brand" type="submit" aria-label="Yorum gönder"><i class="fa-solid fa-arrow-up"></i></button></form></section>
 
@@ -113,7 +119,6 @@
 
     <section id="new-message-modal" class="modal modal--new-message" role="dialog" aria-modal="true" aria-labelledby="new-message-title" hidden><header class="modal-header"><div><span class="eyebrow">SOHBET BAŞLAT</span><h2 id="new-message-title">Kime yazalım?</h2></div><button class="icon-button close-modal" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></header><div id="message-user-list" class="message-user-list"></div></section>
 
-    <!-- YENİ AĞ/KİŞİ MODALI -->
     <section id="network-modal" class="modal modal--network" role="dialog" aria-modal="true" aria-labelledby="network-modal-title" hidden>
       <header class="modal-header">
         <div>

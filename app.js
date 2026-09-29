@@ -16,33 +16,20 @@ const fieldValue = firebase.firestore.FieldValue;
 document.addEventListener("DOMContentLoaded", () => {
   const $ = (id) => document.getElementById(id);
   const state = {
-    user: null,
-    users: {},
-    posts: [],
-    stories: [],
-    feed: "all",
-    activeCommentPostId: null,
-    activeChatUserId: null,
-    selectedMedia: null,
-    selectedStory: null,
-    sharePostId: null,
-    chatUnsubscribe: null,
-    commentUnsubscribe: null,
-    unsubscribers: [],
-    postListenerStarted: false
+    user: null, users: {}, posts: [], stories: [], feed: "all",
+    activeCommentPostId: null, activeChatUserId: null, selectedMedia: null,
+    selectedStory: null, sharePostId: null, chatUnsubscribe: null,
+    commentUnsubscribe: null, unsubscribers: [], postListenerStarted: false
   };
 
-  // SİSTEM TEMASINI ALGILAMA VE DİNLEME
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
 
-  // MOBİL NATIVE HİS: Titreşim (Haptic Feedback)
   const triggerHaptic = (type = "light") => {
     if (!navigator.vibrate) return;
     if (type === "light") navigator.vibrate(40);
     if (type === "success") navigator.vibrate([30, 50, 30]);
   };
 
-  // MOBİL NATIVE HİS: Uygulama İçi Bildirim (Toast)
   const showToast = (message, icon = "fa-bell") => {
     const container = $("toast-container");
     if (!container) return;
@@ -50,16 +37,10 @@ document.addEventListener("DOMContentLoaded", () => {
     toast.className = "app-toast";
     toast.innerHTML = `<i class="fa-solid ${icon}"></i><span>${escapeHTML(message)}</span>`;
     container.appendChild(toast);
-    
     setTimeout(() => toast.classList.add("is-visible"), 10);
-    
-    setTimeout(() => {
-      toast.classList.remove("is-visible");
-      setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    setTimeout(() => { toast.classList.remove("is-visible"); setTimeout(() => toast.remove(), 300); }, 3000);
   };
 
-  // Mobil tarayıcılarda çift dokunuşla oluşan sayfa yakınlaştırmasını engeller.
   let lastTouchEnd = 0;
   document.addEventListener("touchend", (event) => {
     const now = Date.now();
@@ -68,15 +49,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }, { passive: false });
   document.addEventListener("dblclick", (event) => event.preventDefault(), { passive: false });
 
-  const escapeHTML = (value = "") => String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-
+  const escapeHTML = (value = "") => String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
   const cleanHandle = (value = "") => String(value).trim().replace(/^@/, "").replace(/[^a-zA-Z0-9_]/g, "").toLowerCase();
-  const initials = (value = "S") => value.trim().slice(0, 1).toUpperCase() || "S";
   const avatarFor = (profile = {}) => {
     const candidate = String(profile.avatar || "");
     if (/^https?:\/\//i.test(candidate)) return candidate;
@@ -100,25 +74,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const postMedia = (post) => safeMediaURL(post.mediaUrl || post.imageUrl || post.videoUrl);
   const isVideo = (post) => post.mediaType === "video" || /\.(mp4|webm|mov)(?:\?|$)/i.test(postMedia(post));
 
-  function setSplashGone() {
-    setTimeout(() => $("splash-screen").classList.add("is-gone"), 450);
-  }
-
-  function showAuthError(message) {
-    $("auth-error").textContent = message;
-    triggerHaptic();
-  }
-
+  function setSplashGone() { setTimeout(() => $("splash-screen").classList.add("is-gone"), 450); }
+  function showAuthError(message) { $("auth-error").textContent = message; triggerHaptic(); }
   function firebaseError(error, fallback) {
-    const copy = {
-      "auth/invalid-email": "Geçerli bir e-posta adresi yaz.",
-      "auth/user-not-found": "Bu bilgilerle bir hesap bulunamadı.",
-      "auth/wrong-password": "Şifren doğru görünmüyor.",
-      "auth/invalid-credential": "E-posta veya şifre doğru değil.",
-      "auth/email-already-in-use": "Bu e-posta ile zaten bir hesap var.",
-      "auth/weak-password": "Şifren en az 6 karakter olmalı.",
-      "permission-denied": "Bu işlem için iznin yok. Firebase kurallarını kontrol et."
-    };
+    const copy = { "auth/invalid-email": "Geçerli bir e-posta adresi yaz.", "auth/user-not-found": "Bu bilgilerle bir hesap bulunamadı.", "auth/wrong-password": "Şifren doğru görünmüyor.", "auth/email-already-in-use": "Bu e-posta ile zaten bir hesap var." };
     return copy[error?.code] || fallback || "Bir şey ters gitti. Lütfen tekrar dene.";
   }
 
@@ -134,49 +93,49 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".modal").forEach((modal) => modal.hidden = true);
     $("modal-layer").hidden = true;
     document.body.style.overflow = "";
-    if (state.commentUnsubscribe) {
-      state.commentUnsubscribe();
-      state.commentUnsubscribe = null;
-    }
+    if (state.commentUnsubscribe) { state.commentUnsubscribe(); state.commentUnsubscribe = null; }
   }
 
+  // TEMA GÜNCELLEMESİ (Mobildeki Buton da Güncellenecek)
   function updateThemeButton() {
     const dark = document.body.classList.contains("is-dark");
-    $("theme-toggle").querySelector("i").className = dark ? "fa-solid fa-sun" : "fa-regular fa-moon";
-    $("theme-toggle").querySelector("span").textContent = dark ? "Açık tema" : "Tema";
-    
-    // Tarayıcı üst çubuğu rengini ayarla (OLED Siyah veya Saf Beyaz)
+    if ($("theme-toggle")) {
+      $("theme-toggle").querySelector("i").className = dark ? "fa-solid fa-sun" : "fa-regular fa-moon";
+      $("theme-toggle").querySelector("span").textContent = dark ? "Açık tema" : "Tema";
+    }
+    if ($("mobile-theme-toggle")) {
+      $("mobile-theme-toggle").querySelector("i").className = dark ? "fa-solid fa-sun" : "fa-regular fa-moon";
+    }
     const metaThemeColor = document.getElementById("theme-color-meta");
     if(metaThemeColor) metaThemeColor.setAttribute("content", dark ? "#000000" : "#ffffff");
   }
 
   function restoreTheme() {
     const saved = localStorage.getItem("swipper-theme");
-    if (saved === "dark" || (!saved && prefersDark.matches)) {
-      document.body.classList.add("is-dark");
-    } else {
-      document.body.classList.remove("is-dark");
-    }
+    if (saved === "dark" || (!saved && prefersDark.matches)) document.body.classList.add("is-dark");
+    else document.body.classList.remove("is-dark");
     updateThemeButton();
   }
 
-  // Kullanıcı telefonun temasını değiştirirse Swipper da anında değişsin
   prefersDark.addEventListener("change", (e) => {
-    if (!localStorage.getItem("swipper-theme")) {
-      document.body.classList.toggle("is-dark", e.matches);
-      updateThemeButton();
-    }
+    if (!localStorage.getItem("swipper-theme")) { document.body.classList.toggle("is-dark", e.matches); updateThemeButton(); }
   });
+
+  // TEMA DEĞİŞTİRME TETİKLEYİCİSİ
+  const toggleTheme = () => { 
+    document.body.classList.toggle("is-dark"); 
+    localStorage.setItem("swipper-theme", document.body.classList.contains("is-dark") ? "dark" : "light"); 
+    updateThemeButton(); 
+    triggerHaptic(); 
+  };
+  if($("theme-toggle")) $("theme-toggle").addEventListener("click", toggleTheme);
+  if($("mobile-theme-toggle")) $("mobile-theme-toggle").addEventListener("click", toggleTheme);
 
   function setProfileSurfaces() {
     const profile = currentProfile();
     if (!state.user || !profile.username) return;
     const avatar = avatarFor(profile);
-    [["side-user-avatar", avatar], ["quick-avatar", avatar], ["composer-avatar", avatar], ["bottom-avatar", avatar]].forEach(([id, src]) => {
-      $(id).src = src;
-      $(id).alt = profile.name || profile.username;
-    });
-    $("side-user-name").textContent = profile.name || profile.username;
+    [["side-user-avatar", avatar], ["quick-avatar", avatar], ["composer-avatar", avatar], ["bottom-avatar", avatar]].forEach(([id, src]) => { $(id).src = src; $(id).alt = profile.name \vert{}\vert{} profile.username; });$("side-user-name").textContent = profile.name || profile.username;
     $("side-user-handle").textContent = `@${profile.username}`;
     $("composer-name").textContent = profile.name || profile.username;
     $("composer-handle").textContent = `@${profile.username}`;
@@ -195,9 +154,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderStories() {
     const root = $("stories");
     const profile = currentProfile();
-    const stories = [
-      `<button class="story story--add" type="button" data-story-action="add"><span class="story-ring"><img src="${escapeHTML(avatarFor(profile))}" alt=""></span><span>Hikayen</span></button>`
-    ];
+    const stories = [`<button class="story story--add" type="button" data-story-action="add"><span class="story-ring"><img src="${escapeHTML(avatarFor(profile))}" alt=""></span><span>Hikayen</span></button>`];
     state.stories.slice(0, 15).forEach((story) => {
       const user = state.users[story.authorId] || { username: "swipper" };
       stories.push(`<button class="story" type="button" data-story-id="${escapeHTML(story.id)}"><span class="story-ring"><img src="${escapeHTML(avatarFor(user))}" alt="${escapeHTML(user.username)}"></span><span>${escapeHTML(user.username || "üye")}</span></button>`);
@@ -205,36 +162,29 @@ document.addEventListener("DOMContentLoaded", () => {
     root.innerHTML = stories.join("");
   }
 
-  function mediaMarkup(post) {
-    const url = postMedia(post);
-    if (!url) return "";
-    if (isVideo(post)) return `<div class="post-media"><video src="${escapeHTML(url)}" controls playsinline preload="metadata"></video></div>`;
-    return `<div class="post-media"><img src="${escapeHTML(url)}" alt="Paylaşım görseli" loading="lazy"></div>`;
-  }
-
   function postMarkup(post) {
     const author = state.users[post.authorId] || { username: "swipper", name: "Swipper üyesi" };
     const likes = Array.isArray(post.likes) ? post.likes : [];
     const liked = likes.includes(state.user?.uid);
-    const canManage = post.authorId === state.user?.uid;
     const content = postText(post);
+    const media = postMedia(post);
+    const visual = !media ? "" : isVideo(post) ? `<div class="post-media"><video src="${escapeHTML(media)}" controls playsinline preload="metadata"></video></div>` : `<div class="post-media"><img src="${escapeHTML(media)}" alt="Paylaşım" loading="lazy"></div>`;
+    
     return `<article class="post-card" data-post-id="${escapeHTML(post.id)}">
       <div class="post-main">
         <header class="post-head">
           <button type="button" data-user-id="${escapeHTML(post.authorId)}"><img src="${escapeHTML(avatarFor(author))}" alt=""></button>
-          <button class="post-author" type="button" data-user-id="${escapeHTML(post.authorId)}"><b>${escapeHTML(author.name || author.username || "Swipper üyesi")}</b><span>@${escapeHTML(author.username || "uye")} · ${formatDate(post.createdAt)}</span></button>
-          ${canManage ? `<button class="post-more" type="button" data-post-action="delete" title="Gönderiyi sil" aria-label="Gönderiyi sil"><i class="fa-solid fa-trash-can"></i></button>` : ""}
+          <button class="post-author" type="button" data-user-id="${escapeHTML(post.authorId)}"><b>${escapeHTML(author.name || author.username)}</b><span>@${escapeHTML(author.username)} · ${formatDate(post.createdAt)}</span></button>
+          ${post.authorId === state.user?.uid ? `<button class="post-more" type="button" data-post-action="delete"><i class="fa-solid fa-trash-can"></i></button>` : ""}
         </header>
         ${content ? `<p class="post-text">${escapeHTML(content)}</p>` : ""}
-        ${mediaMarkup(post)}
+        ${visual}
         <footer class="post-actions">
           <button class="reaction-button ${liked ? "is-liked" : ""}" type="button" data-post-action="like"><i class="${liked ? "fa-solid" : "fa-regular"} fa-heart"></i><span>${likes.length || ""}</span></button>
           <button class="reaction-button" type="button" data-post-action="comments"><i class="fa-regular fa-comment"></i><span>${Number(post.commentsCount || 0) || ""}</span></button>
           <button class="reaction-button reaction-button--share" type="button" data-post-action="share"><i class="fa-regular fa-paper-plane"></i></button>
-          <span class="post-date">${formatDate(post.createdAt)}</span>
         </footer>
       </div>
-      <div class="post-comment-peek"><button type="button" data-post-action="comments">Yoruma katıl</button></div>
     </article>`;
   }
 
@@ -243,7 +193,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const posts = state.feed === "following" ? state.posts.filter((post) => following.includes(post.authorId)) : state.posts;
     $("feed").innerHTML = posts.map(postMarkup).join("");
     $("empty-feed").hidden = posts.length > 0;
-    document.querySelectorAll(".feed-tab").forEach((button) => button.classList.toggle("is-active", button.dataset.feed === state.feed));
+    document.querySelectorAll(".feed-tab").forEach((btn) => btn.classList.toggle("is-active", btn.dataset.feed === state.feed));
   }
 
   function renderExplore() {
@@ -254,113 +204,73 @@ document.addEventListener("DOMContentLoaded", () => {
     $("explore-gallery").innerHTML = photoPosts.length ? photoPosts.map((post) => {
       const media = postMedia(post);
       const likes = Array.isArray(post.likes) ? post.likes.length : 0;
-      const visual = isVideo(post)
-        ? `<video src="${escapeHTML(media)}" muted playsinline preload="metadata"></video>`
-        : `<img src="${escapeHTML(media)}" alt="Keşfet paylaşımı" loading="lazy">`;
+      const visual = isVideo(post) ? `<video src="${escapeHTML(media)}" muted playsinline></video>` : `<img src="${escapeHTML(media)}" alt="" loading="lazy">`;
       return `<button class="explore-tile" type="button" data-open-post="${escapeHTML(post.id)}">${visual}<span class="explore-tile-badge"><i class="${isVideo(post) ? "fa-solid fa-play" : "fa-regular fa-heart"}"></i>${likes || ""}</span></button>`;
-    }).join("") : `<div class="explore-gallery-empty"><span><i class="fa-regular fa-image"></i> Fotoğraf paylaşıldığında burada Instagram tarzı bir keşfet akışı oluşacak.</span></div>`;
-    const people = Object.entries(state.users)
-      .filter(([uid, person]) => uid !== state.user?.uid && `${person.name || ""} ${person.username || ""}`.toLocaleLowerCase("tr-TR").includes(query))
-      .sort(([, a], [, b]) => String(a.username || "").localeCompare(String(b.username || ""), "tr"));
-    $("explore-people-count").textContent = people.length ? `${people.length} kişi` : "";
-    $("explore-users").innerHTML = people.length ? people.map(([uid, person]) => `<article class="user-card">
-      <button class="user-card-top" type="button" data-user-id="${escapeHTML(uid)}"><img src="${escapeHTML(avatarFor(person))}" alt=""><span class="user-card-info"><b>${escapeHTML(person.name || person.username || "Swipper üyesi")}</b><span>@${escapeHTML(person.username || "uye")}</span></span></button>
-      <p>${escapeHTML(person.bio || "Swipper'da yeni fikirler keşfediyor.")}</p>
-      <button class="button ${following.includes(uid) ? "button--soft" : "button--primary"}" type="button" data-follow-id="${escapeHTML(uid)}">${following.includes(uid) ? "Takipte" : "Takip et"}</button>
-    </article>`).join("") : `<div class="empty-state"><span class="empty-icon"><i class="fa-solid fa-magnifying-glass"></i></span><h3>Kimse bulunamadı</h3><p>Farklı bir isim ya da kullanıcı adı dene.</p></div>`;
+    }).join("") : "";
+    
+    const people = Object.entries(state.users).filter(([uid, person]) => uid !== state.user?.uid && `${person.name || ""} ${person.username || ""}`.toLocaleLowerCase("tr-TR").includes(query)).sort(([, a], [, b]) => String(a.username || "").localeCompare(String(b.username || ""), "tr"));
+    $("explore-users").innerHTML = people.length ? people.map(([uid, person]) => `<article class="user-card"><button class="user-card-top" type="button" data-user-id="${escapeHTML(uid)}"><img src="${escapeHTML(avatarFor(person))}" alt=""><span class="user-card-info"><b>${escapeHTML(person.name || person.username)}</b><span>@${escapeHTML(person.username)}</span></span></button><button class="button ${following.includes(uid) ? "button--soft" : "button--primary"}" type="button" data-follow-id="${escapeHTML(uid)}">${following.includes(uid) ? "Takipte" : "Takip et"}</button></article>`).join("") : `<div class="empty-state"><h3>Kimse bulunamadı</h3></div>`;
   }
 
-  function userPosts(uid) { return state.posts.filter((post) => post.authorId === uid); }
-
   function profileMarkup(profile, uid, isOwn) {
-    const posts = userPosts(uid);
+    const posts = state.posts.filter((post) => post.authorId === uid);
     const following = Array.isArray(currentProfile().following) ? currentProfile().following : [];
     const isFollowing = following.includes(uid);
     const grid = posts.length ? posts.map((post) => {
       const media = postMedia(post);
       if (media) return `<button class="profile-grid-item" type="button" data-open-post="${escapeHTML(post.id)}">${isVideo(post) ? `<video src="${escapeHTML(media)}" muted preload="metadata"></video>` : `<img src="${escapeHTML(media)}" alt="">`}</button>`;
-      return `<button class="profile-grid-item profile-text-post" type="button" data-open-post="${escapeHTML(post.id)}">${escapeHTML(postText(post).slice(0, 70) || "Not")}</button>`;
-    }).join("") : `<div class="empty-state"><span class="empty-icon"><i class="fa-regular fa-image"></i></span><h3>Henüz paylaşım yok</h3><p>${isOwn ? "İlk anını paylaş ve profilini canlandır." : "Bu profil henüz bir şey paylaşmadı."}</p></div>`;
+      return `<button class="profile-grid-item profile-text-post" type="button" data-open-post="${escapeHTML(post.id)}">${escapeHTML(postText(post).slice(0, 70))}</button>`;
+    }).join("") : `<div class="empty-state"><p>Henüz paylaşım yok</p></div>`;
     
-    return `<div class="profile-hero"><div class="profile-hero-top"><img class="profile-avatar" src="${escapeHTML(avatarFor(profile))}" alt="${escapeHTML(profile.name || profile.username || "Profil")}"><div class="profile-head-copy"><h2>${escapeHTML(profile.name || profile.username || "Swipper üyesi")}</h2><span>@${escapeHTML(profile.username || "uye")}</span></div></div>
+    return `<div class="profile-hero"><div class="profile-hero-top"><img class="profile-avatar" src="${escapeHTML(avatarFor(profile))}" alt=""><div class="profile-head-copy"><h2>${escapeHTML(profile.name || profile.username)}</h2><span>@${escapeHTML(profile.username)}</span></div></div>
       <p class="profile-bio">${escapeHTML(profile.bio || "Swipper'da yeni fikirler keşfediyor.")}</p>
-      <div class="profile-actions">${isOwn ? `<button id="edit-profile" class="button button--soft" type="button"><i class="fa-regular fa-pen-to-square"></i>Profili düzenle</button><button id="profile-share" class="button button--primary" type="button"><i class="fa-solid fa-plus"></i>Paylaş</button>` : `<button class="button ${isFollowing ? "button--soft" : "button--primary"}" type="button" data-follow-id="${escapeHTML(uid)}">${isFollowing ? "Takipte" : "Takip et"}</button><button class="button button--soft" type="button" data-message-id="${escapeHTML(uid)}"><i class="fa-regular fa-paper-plane"></i>Mesaj</button>`}</div>
+      <div class="profile-actions">${isOwn ? `<button id="edit-profile" class="button button--soft" type="button">Profili düzenle</button>` : `<button class="button ${isFollowing ? "button--soft" : "button--primary"}" type="button" data-follow-id="${escapeHTML(uid)}">${isFollowing ? "Takipte" : "Takip et"}</button><button class="button button--soft" type="button" data-message-id="${escapeHTML(uid)}">Mesaj</button>`}</div>
       <div class="profile-stats">
-        <span class="profile-stat"><b>${posts.length}</b><span>Paylaşım</span></span>
-        <button class="profile-stat profile-stat--click" type="button" data-network-action="followers" data-network-uid="${escapeHTML(uid)}">
-          <b>${Array.isArray(profile.followers) ? profile.followers.length : 0}</b><span>Takipçi</span>
-        </button>
-        <button class="profile-stat profile-stat--click" type="button" data-network-action="following" data-network-uid="${escapeHTML(uid)}">
-          <b>${Array.isArray(profile.following) ? profile.following.length : 0}</b><span>Takip</span>
-        </button>
+        <span class="profile-stat"><b>${posts.length}</b><span>Gönderi</span></span>
+        <button class="profile-stat profile-stat--click" type="button" data-network-action="followers" data-network-uid="${escapeHTML(uid)}"><b>${Array.isArray(profile.followers) ? profile.followers.length : 0}</b><span>Takipçi</span></button>
+        <button class="profile-stat profile-stat--click" type="button" data-network-action="following" data-network-uid="${escapeHTML(uid)}"><b>${Array.isArray(profile.following) ? profile.following.length : 0}</b><span>Takip</span></button>
       </div></div>
-      <div class="profile-section-heading"><h3>Paylaşımlar</h3><span>${posts.length} içerik</span></div><div class="profile-grid">${grid}</div>`;
+      <div class="profile-grid">${grid}</div>`;
   }
 
-  function renderProfile() {
-    if (!state.user) return;
-    $("profile-content").innerHTML = profileMarkup(currentProfile(), state.user.uid, true);
-  }
-
+  function renderProfile() { if (state.user) $("profile-content").innerHTML = profileMarkup(currentProfile(), state.user.uid, true); }
   function openUserProfile(uid) {
-    const profile = state.users[uid];
-    if (!profile) return;
-    $("user-modal-content").innerHTML = `<div class="user-profile">${profileMarkup(profile, uid, uid === state.user?.uid)}</div>`;
+    if (!state.users[uid]) return;
+    $("user-modal-content").innerHTML = `<div class="user-profile">${profileMarkup(state.users[uid], uid, uid === state.user?.uid)}</div>`;
     openModal("user-modal");
   }
 
   function openNetworkModal(type, uid) {
     const profile = state.users[uid];
     if (!profile) return;
-    
     const list = type === "followers" ? profile.followers : profile.following;
     const uids = Array.isArray(list) ? list : [];
-    
-    $("network-modal-type").textContent = type === "followers" ? "AĞ BAĞLANTILARI" : "TAKİP ETTİKLERİ";
     $("network-modal-title").textContent = type === "followers" ? "Takipçiler" : "Takip Edilenler";
-    
     const myFollowing = Array.isArray(currentProfile().following) ? currentProfile().following : [];
-    
     $("network-list").innerHTML = uids.length ? uids.map(id => {
       const person = state.users[id];
       if (!person) return "";
       const isFollowing = myFollowing.includes(id);
-      const isMe = id === state.user?.uid;
-      
-      return `
-      <div class="network-item">
-        <button type="button" class="network-item-info" data-user-id="${escapeHTML(id)}">
-          <img src="${escapeHTML(avatarFor(person))}" alt="">
-          <div>
-            <b>${escapeHTML(person.name || person.username)}</b>
-            <span>@${escapeHTML(person.username)}</span>
-          </div>
-        </button>
-        ${!isMe ? `<button class="button ${isFollowing ? "button--soft" : "button--primary"}" type="button" data-follow-id="${escapeHTML(id)}">${isFollowing ? "Takipte" : "Takip et"}</button>` : ""}
-      </div>`;
-    }).join("") : `<div class="empty-state"><span class="empty-icon"><i class="fa-solid fa-user-group"></i></span><h3>Burada henüz kimse yok</h3><p>Bağlantılar yakında burada görünür.</p></div>`;
-    
+      return `<div class="network-item"><button type="button" class="network-item-info" data-user-id="${escapeHTML(id)}"><img src="${escapeHTML(avatarFor(person))}" alt=""><div><b>${escapeHTML(person.name || person.username)}</b><span>@${escapeHTML(person.username)}</span></div></button>${id !== state.user?.uid ? `<button class="button ${isFollowing ? "button--soft" : "button--primary"}" type="button" data-follow-id="${escapeHTML(id)}">${isFollowing ? "Takipte" : "Takip et"}</button>` : ""}</div>`;
+    }).join("") : `<div class="empty-state"><p>Burada henüz kimse yok.</p></div>`;
     openModal("network-modal");
   }
 
   function openPostDetail(id) {
     const post = state.posts.find((item) => item.id === id);
     if (!post) return;
-    const author = state.users[post.authorId] || { name: "Swipper üyesi" };
-    $("post-modal-title").textContent = author.name || author.username || "Akıştan bir an";
     $("post-modal-content").innerHTML = postMarkup(post);
     openModal("post-modal");
   }
 
   function renderConversationList() {
     const people = Object.entries(state.users).filter(([uid]) => uid !== state.user?.uid).sort(([, a], [, b]) => String(a.name || "").localeCompare(String(b.name || ""), "tr"));
-    $("conversation-list").innerHTML = people.length ? people.map(([uid, person]) => `<button class="conversation-item ${state.activeChatUserId === uid ? "is-active" : ""}" type="button" data-message-id="${escapeHTML(uid)}"><img src="${escapeHTML(avatarFor(person))}" alt=""><span class="conversation-copy"><b>${escapeHTML(person.name || person.username || "Swipper üyesi")}</b><span>@${escapeHTML(person.username || "uye")} ile sohbet et</span></span></button>`).join("") : `<div class="empty-state"><span class="empty-icon"><i class="fa-regular fa-comment"></i></span><h3>Henüz kimse yok</h3><p>Keşfet bölümünden insanlarla bağlantı kur.</p></div>`;
+    $("conversation-list").innerHTML = people.length ? people.map(([uid, person]) => `<button class="conversation-item ${state.activeChatUserId === uid ? "is-active" : ""}" type="button" data-message-id="${escapeHTML(uid)}"><img src="${escapeHTML(avatarFor(person))}" alt=""><span class="conversation-copy"><b>${escapeHTML(person.name || person.username)}</b><span>Sohbet et</span></span></button>`).join("") : "";
   }
 
   function renderMessageUsers() {
-    const root = $("message-user-list");
     const people = Object.entries(state.users).filter(([uid]) => uid !== state.user?.uid);
-    root.innerHTML = people.length ? people.map(([uid, person]) => `<button class="message-user" type="button" data-message-id="${escapeHTML(uid)}"><img src="${escapeHTML(avatarFor(person))}" alt=""><span><b>${escapeHTML(person.name || person.username || "Swipper üyesi")}</b><small>@${escapeHTML(person.username || "uye")}</small></span></button>`).join("") : `<div class="empty-state"><span class="empty-icon"><i class="fa-regular fa-user"></i></span><h3>Henüz başka üye yok</h3><p>Yeni üyeler burada görünecek.</p></div>`;
+    $("message-user-list").innerHTML = people.length ? people.map(([uid, person]) => `<button class="message-user" type="button" data-message-id="${escapeHTML(uid)}"><img src="${escapeHTML(avatarFor(person))}" alt=""><span><b>${escapeHTML(person.name || person.username)}</b><small>@${escapeHTML(person.username)}</small></span></button>`).join("") : "";
   }
 
   function openChat(uid) {
@@ -369,123 +279,77 @@ document.addEventListener("DOMContentLoaded", () => {
     closeModals();
     state.activeChatUserId = uid;
     $("chat-user-avatar").src = avatarFor(person);
-    $("chat-user-avatar").alt = person.name || person.username;
     $("chat-user-name").textContent = person.name || person.username;
-    $("chat-user-handle").textContent = `@${person.username || "uye"}`;
-    $("chat-placeholder").hidden = true;
-    $("chat-content").hidden = false;
     $("chat-pane").closest(".messages-layout").classList.add("is-chat-open");
     showView("messages");
-    renderConversationList();
     if (state.chatUnsubscribe) state.chatUnsubscribe();
-    const room = chatIdFor(state.user.uid, uid);
-    state.chatUnsubscribe = db.collection("chats").doc(room).collection("messages").orderBy("createdAt", "asc").onSnapshot((snapshot) => {
+    state.chatUnsubscribe = db.collection("chats").doc(chatIdFor(state.user.uid, uid)).collection("messages").orderBy("createdAt", "asc").onSnapshot((snapshot) => {
       $("chat-messages").innerHTML = snapshot.docs.map((doc) => {
         const message = doc.data();
         return `<div class="message ${message.senderId === state.user.uid ? "message--mine" : "message--theirs"}">${escapeHTML(message.text || "")}</div>`;
       }).join("");
       $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
-    }, () => { $("chat-messages").innerHTML = `<div class="empty-state"><p>Mesajlar şu an yüklenemiyor.</p></div>`; });
+    });
   }
 
   async function toggleFollow(uid) {
     if (!state.user || uid === state.user.uid) return;
     triggerHaptic();
-    const profile = currentProfile();
-    const following = Array.isArray(profile.following) ? profile.following : [];
-    const followed = following.includes(uid);
+    const followed = (Array.isArray(currentProfile().following) ? currentProfile().following : []).includes(uid);
     try {
       await Promise.all([
         db.collection("users").doc(state.user.uid).update({ following: followed ? fieldValue.arrayRemove(uid) : fieldValue.arrayUnion(uid) }),
         db.collection("users").doc(uid).update({ followers: followed ? fieldValue.arrayRemove(state.user.uid) : fieldValue.arrayUnion(state.user.uid) })
       ]);
       showToast(followed ? "Takipten çıkıldı" : "Takip edildi", followed ? "fa-user-minus" : "fa-user-check");
-      if (!$("network-modal").hidden) {
-        const type = $("network-modal-title").textContent === "Takipçiler" ? "followers" : "following";
-        setTimeout(() => {
-            const currentModalUid = $("user-modal").hidden ? state.user.uid : uid;
-            openNetworkModal(type, currentModalUid);
-        }, 100); 
-      }
-    } catch (error) { alert(firebaseError(error, "Takip işlemi gerçekleştirilemedi.")); }
+      if (!$("network-modal").hidden) setTimeout(() => openNetworkModal($("network-modal-title").textContent === "Takipçiler" ? "followers" : "following", $("user-modal").hidden ? state.user.uid : uid), 100);
+    } catch (error) { alert(firebaseError(error)); }
   }
 
   function openComposer() {
     state.selectedMedia = null;
-    $("media-input").value = "";
-    $("media-preview").hidden = true;
-    $("media-preview").innerHTML = "";
-    $("post-text").value = "";
-    $("char-count").textContent = "0/1200";
-    $("upload-status").textContent = "";
+    $("media-input").value = ""; $("media-preview").hidden = true; $("media-preview").innerHTML = ""; $("post-text").value = ""; $("upload-status").textContent = "";
     openModal("composer-modal");
-    setTimeout(() => $("post-text").focus(), 80);
   }
 
-  function previewMedia(file) {
-    const url = URL.createObjectURL(file);
-    const preview = $("media-preview");
-    const visual = file.type.startsWith("video/") ? `<video src="${url}" controls playsinline></video>` : `<img src="${url}" alt="Seçilen medya">`;
-    preview.innerHTML = `${visual}<button id="remove-media" type="button" aria-label="Medyayı kaldır"><i class="fa-solid fa-xmark"></i></button>`;
-    preview.hidden = false;
-    $("remove-media").onclick = () => {
-      URL.revokeObjectURL(url);
-      state.selectedMedia = null;
-      $("media-input").value = "";
-      preview.hidden = true;
-      preview.innerHTML = "";
-    };
-  }
-
-  async function uploadMedia(file, messageTarget) {
-    if (file.size > 50 * 1024 * 1024) throw new Error("Fotoğraf veya video 50 MB'dan küçük olmalı.");
-    messageTarget.textContent = "Medya hazırlanıyor ve yükleniyor…";
-    const formData = new FormData();
-    formData.append("reqtype", "fileupload");
-    formData.append("fileToUpload", file);
-    const response = await fetch("https://corsproxy.io/?https://catbox.moe/user/api.php", { method: "POST", body: formData });
-    if (!response.ok) throw new Error("Medya yüklenemedi. Lütfen bağlantını kontrol edip tekrar dene.");
-    const url = (await response.text()).trim();
-    if (!safeMediaURL(url)) throw new Error("Yüklenen medya için güvenli bir bağlantı alınamadı.");
-    return url;
+  // --- HIZLI RESİM YÜKLEME SİSTEMİ (IMGBB API) EKLENDİ ---
+  async function uploadMedia(file, msgElement) {
+    if (file.size > 15 * 1024 * 1024) throw new Error("Fotoğraf 15 MB'dan küçük olmalı.");
+    msgElement.textContent = "Fotoğraf hızlı yükleme servisine iletiliyor...";
+    
+    // ImgBB API (Tamamen CORS uyumlu, proxy sorunu yaşatmaz)
+    const fd = new FormData(); 
+    fd.append("image", file);
+    
+    const res = await fetch("https://api.imgbb.com/1/upload?key=67015dbedeb1d3c01f6ec1029c78ec52", { 
+      method: "POST", 
+      body: fd 
+    });
+    
+    if (!res.ok) throw new Error("Yükleme başarısız. Lütfen tekrar dene.");
+    
+    const result = await res.json();
+    if (result && result.data && result.data.url) {
+        return result.data.url;
+    } else {
+        throw new Error("Resim sunucudan alınamadı.");
+    }
   }
 
   async function publishPost(event) {
     event.preventDefault();
     const text = $("post-text").value.trim();
-    if (!text && !state.selectedMedia) { $("upload-status").textContent = "Bir not yaz veya medya ekle."; return; }
-    const button = $("publish-btn");
-    button.disabled = true;
+    if (!text && !state.selectedMedia) return;
+    $("publish-btn").disabled = true;
     try {
       let mediaUrl = "";
       if (state.selectedMedia) mediaUrl = await uploadMedia(state.selectedMedia, $("upload-status"));
-      await db.collection("posts").add({
-        authorId: state.user.uid,
-        text,
-        caption: text,
-        mediaUrl,
-        imageUrl: mediaUrl,
-        mediaType: state.selectedMedia?.type.startsWith("video/") ? "video" : state.selectedMedia ? "image" : "",
-        likes: [],
-        commentsCount: 0,
-        createdAt: fieldValue.serverTimestamp()
-      });
+      await db.collection("posts").add({ authorId: state.user.uid, text, caption: text, mediaUrl, imageUrl: mediaUrl, mediaType: state.selectedMedia ? "image" : "", likes: [], commentsCount: 0, createdAt: fieldValue.serverTimestamp() });
       closeModals();
       showToast("Başarıyla paylaşıldı!", "fa-circle-check");
       triggerHaptic("success");
-    } catch (error) { $("upload-status").textContent = error.message || firebaseError(error); }
-    finally { button.disabled = false; }
-  }
-
-  async function createStory(file) {
-    if (!file || !state.user) return;
-    try {
-      const progress = { textContent: "" };
-      const url = await uploadMedia(file, progress);
-      await db.collection("stories").add({ authorId: state.user.uid, imageUrl: url, createdAt: fieldValue.serverTimestamp() });
-      showToast("Hikaye paylaşıldı", "fa-circle-check");
-      triggerHaptic("success");
-    } catch (error) { alert(error.message || "Hikaye yüklenemedi."); }
+    } catch (error) { $("upload-status").textContent = error.message; }
+    finally { $("publish-btn").disabled = false; }
   }
 
   async function likePost(id) {
@@ -493,53 +357,44 @@ document.addEventListener("DOMContentLoaded", () => {
     triggerHaptic();
     const ref = db.collection("posts").doc(id);
     try {
-      await db.runTransaction(async (transaction) => {
-        const doc = await transaction.get(ref);
+      await db.runTransaction(async (t) => {
+        const doc = await t.get(ref);
         if (!doc.exists) return;
         const likes = Array.isArray(doc.data().likes) ? doc.data().likes : [];
-        const next = likes.includes(state.user.uid) ? likes.filter((item) => item !== state.user.uid) : [...likes, state.user.uid];
-        transaction.update(ref, { likes: next });
+        t.update(ref, { likes: likes.includes(state.user.uid) ? likes.filter(i => i !== state.user.uid) : [...likes, state.user.uid] });
       });
-    } catch (error) { alert(firebaseError(error, "Beğeni kaydedilemedi.")); }
+    } catch (e) { console.error(e); }
   }
 
   async function deletePost(id) {
-    if (!window.confirm("Bu paylaşım silinsin mi? Bu işlem geri alınamaz.")) return;
-    try { 
-      await db.collection("posts").doc(id).delete(); 
-      showToast("Paylaşım silindi", "fa-trash");
-      triggerHaptic();
-    }
-    catch (error) { alert(firebaseError(error, "Paylaşım silinemedi.")); }
+    if (!window.confirm("Bu paylaşım silinsin mi?")) return;
+    try { await db.collection("posts").doc(id).delete(); showToast("Paylaşım silindi", "fa-trash"); }
+    catch (error) { alert("Silinemedi."); }
   }
 
   function openComments(id) {
-    state.activeCommentPostId = id;
-    $("comments-list").innerHTML = "";
-    $("comment-input").value = "";
+    state.activeCommentPostId = id; $("comments-list").innerHTML = ""; $("comment-input").value = "";
     openModal("comments-modal");
     if (state.commentUnsubscribe) state.commentUnsubscribe();
     state.commentUnsubscribe = db.collection("posts").doc(id).collection("comments").orderBy("createdAt", "asc").onSnapshot((snapshot) => {
-      $("comments-list").innerHTML = snapshot.docs.length ? snapshot.docs.map((doc) => {
-        const comment = doc.data();
-        const author = state.users[comment.authorId] || { username: "üye" };
-        return `<article class="comment"><img class="comment-avatar" src="${escapeHTML(avatarFor(author))}" alt=""><div class="comment-body"><b>@${escapeHTML(author.username || "uye")}</b><p>${escapeHTML(comment.text || "")}</p></div></article>`;
-      }).join("") : `<div class="empty-state"><span class="empty-icon"><i class="fa-regular fa-comment"></i></span><h3>İlk yorumu sen bırak</h3><p>Bu paylaşım için henüz konuşma başlamadı.</p></div>`;
+      $("comments-list").innerHTML = snapshot.docs.length ? snapshot.docs.map(doc => {
+        const c = doc.data(); const author = state.users[c.authorId] || { username: "üye" };
+        return `<article class="comment"><img class="comment-avatar" src="${escapeHTML(avatarFor(author))}" alt=""><div class="comment-body"><b>@${escapeHTML(author.username)}</b><p>${escapeHTML(c.text)}</p></div></article>`;
+      }).join("") : `<p>İlk yorumu sen bırak.</p>`;
       $("comments-list").scrollTop = $("comments-list").scrollHeight;
-    }, () => { $("comments-list").innerHTML = `<div class="empty-state"><p>Yorumlar yüklenemedi.</p></div>`; });
+    });
   }
 
   async function sendComment(event) {
     event.preventDefault();
     const text = $("comment-input").value.trim();
     if (!text || !state.activeCommentPostId) return;
-    const post = state.posts.find((item) => item.id === state.activeCommentPostId);
     try {
       await db.collection("posts").doc(state.activeCommentPostId).collection("comments").add({ authorId: state.user.uid, text, createdAt: fieldValue.serverTimestamp() });
-      if (post) await db.collection("posts").doc(state.activeCommentPostId).update({ commentsCount: fieldValue.increment(1) });
+      await db.collection("posts").doc(state.activeCommentPostId).update({ commentsCount: fieldValue.increment(1) });
       $("comment-input").value = "";
       triggerHaptic("success");
-    } catch (error) { alert(firebaseError(error, "Yorum gönderilemedi.")); }
+    } catch (e) { alert("Gönderilemedi."); }
   }
 
   async function sendMessage(event) {
@@ -548,210 +403,124 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!text || !state.activeChatUserId || !state.user) return;
     try {
       await db.collection("chats").doc(chatIdFor(state.user.uid, state.activeChatUserId)).collection("messages").add({ senderId: state.user.uid, text, createdAt: fieldValue.serverTimestamp() });
-      $("chat-input").value = "";
-      triggerHaptic();
-    } catch (error) { alert(firebaseError(error, "Mesaj gönderilemedi.")); }
+      $("chat-input").value = ""; triggerHaptic();
+    } catch (e) { alert("Mesaj gönderilemedi."); }
   }
 
   async function sharePostTo(uid) {
-    const post = state.posts.find((item) => item.id === state.sharePostId);
+    const post = state.posts.find(i => i.id === state.sharePostId);
     if (!post || !state.user) return openChat(uid);
-    const author = state.users[post.authorId] || { name: "Bir üye" };
-    const summary = postText(post).slice(0, 180) || "Bir fotoğraf paylaştı.";
     try {
-      await db.collection("chats").doc(chatIdFor(state.user.uid, uid)).collection("messages").add({
-        senderId: state.user.uid,
-        text: `↗ ${author.name || author.username || "Bir üye"} paylaşımı: ${summary}`,
-        createdAt: fieldValue.serverTimestamp()
-      });
-      state.sharePostId = null;
-      openChat(uid);
-      showToast("Sohbete gönderildi", "fa-paper-plane");
-    } catch (error) { alert(firebaseError(error, "Paylaşım gönderilemedi.")); }
+      await db.collection("chats").doc(chatIdFor(state.user.uid, uid)).collection("messages").add({ senderId: state.user.uid, text: `↗ Paylaşım: ${postText(post).slice(0, 50)}...`, createdAt: fieldValue.serverTimestamp() });
+      state.sharePostId = null; openChat(uid); showToast("Sohbete gönderildi", "fa-paper-plane");
+    } catch (e) { alert("Gönderilemedi."); }
   }
 
   function openStory(id) {
-    const story = state.stories.find((item) => item.id === id);
+    const story = state.stories.find(i => i.id === id);
     if (!story) return;
     const author = state.users[story.authorId] || { username: "swipper" };
-    const url = safeMediaURL(story.imageUrl || story.mediaUrl);
-    if (!url) return;
-    $("story-content").innerHTML = `<div class="story-view"><img src="${escapeHTML(url)}" alt="Hikaye"><div class="story-copy"><img src="${escapeHTML(avatarFor(author))}" alt=""><span><b>${escapeHTML(author.name || author.username || "Swipper üyesi")}</b><small>@${escapeHTML(author.username || "uye")} · ${formatDate(story.createdAt)}</small></span></div></div>`;
+    $("story-content").innerHTML = `<div class="story-view"><img src="${escapeHTML(safeMediaURL(story.imageUrl))}" alt=""><div class="story-copy"><img src="${escapeHTML(avatarFor(author))}" alt=""><span><b>${escapeHTML(author.name || author.username)}</b></span></div></div>`;
     openModal("story-modal");
-  }
-
-  function openProfileEditor() {
-    const profile = currentProfile();
-    $("profile-name-input").value = profile.name || "";
-    $("profile-handle-input").value = profile.username || "";
-    $("profile-bio-input").value = profile.bio || "";
-    $("profile-error").textContent = "";
-    openModal("profile-modal");
   }
 
   async function saveProfile(event) {
     event.preventDefault();
     const name = $("profile-name-input").value.trim();
     const username = cleanHandle($("profile-handle-input").value);
-    const bio = $("profile-bio-input").value.trim();
-    if (!name || username.length < 3) { $("profile-error").textContent = "Adını ve en az 3 karakterlik bir kullanıcı adını yaz."; return; }
-    const duplicate = Object.entries(state.users).find(([uid, person]) => uid !== state.user.uid && cleanHandle(person.username) === username);
-    if (duplicate) { $("profile-error").textContent = "Bu kullanıcı adı zaten alınmış."; return; }
+    if (!name || username.length < 3) return $("profile-error").textContent = "Ad ve (min 3) kullanıcı adı yaz.";
+    if (Object.entries(state.users).find(([uid, p]) => uid !== state.user.uid && cleanHandle(p.username) === username)) return $("profile-error").textContent = "Bu kullanıcı adı alınmış.";
     try { 
-      await db.collection("users").doc(state.user.uid).update({ name, username, bio }); 
-      closeModals(); 
-      showToast("Profil güncellendi", "fa-user-check");
-      triggerHaptic("success");
-    }
-    catch (error) { $("profile-error").textContent = firebaseError(error, "Profil kaydedilemedi."); }
-  }
-
-  function ensureProfile(user) {
-    return db.collection("users").doc(user.uid).get().then((doc) => {
-      if (doc.exists) return;
-      const name = user.email?.split("@")[0] || "yeniüye";
-      const username = cleanHandle(name).slice(0, 20) || `uye${user.uid.slice(0, 5)}`;
-      return db.collection("users").doc(user.uid).set({ name, username, bio: "Swipper'a yeni katıldı ✦", avatar: "", following: [], followers: [] });
-    });
+      await db.collection("users").doc(state.user.uid).update({ name, username, bio: $("profile-bio-input").value.trim() }); 
+      closeModals(); showToast("Profil kaydedildi", "fa-user-pen"); triggerHaptic("success");
+    } catch (e) { $("profile-error").textContent = "Kaydedilemedi."; }
   }
 
   function startRealtimeData() {
-    state.unsubscribers.forEach((unsubscribe) => unsubscribe());
-    state.unsubscribers = [];
-    state.unsubscribers.push(db.collection("users").onSnapshot((snapshot) => {
-      state.users = {};
-      snapshot.forEach((doc) => state.users[doc.id] = doc.data());
-      setProfileSurfaces(); renderStories(); renderFeed(); renderExplore(); renderProfile(); renderConversationList(); renderMessageUsers();
-    }, () => { alert("Kullanıcı verileri yüklenemedi. Firebase kurallarını kontrol et."); }));
-    state.unsubscribers.push(db.collection("posts").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
-      state.posts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      renderFeed(); renderProfile();
-    }, () => { $("feed").innerHTML = `<div class="empty-state"><span class="empty-icon"><i class="fa-solid fa-triangle-exclamation"></i></span><h3>Akış yüklenemedi</h3><p>Firebase bağlantısını ve güvenlik kurallarını kontrol et.</p></div>`; }));
-    state.unsubscribers.push(db.collection("stories").orderBy("createdAt", "desc").limit(20).onSnapshot((snapshot) => {
-      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-      state.stories = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).filter((story) => !dateFrom(story.createdAt) || dateFrom(story.createdAt).getTime() > cutoff);
-      renderStories();
-    }, () => { state.stories = []; renderStories(); }));
+    state.unsubscribers.forEach(u => u()); state.unsubscribers = [];
+    state.unsubscribers.push(db.collection("users").onSnapshot(s => { state.users = {}; s.forEach(d => state.users[d.id] = d.data()); setProfileSurfaces(); renderStories(); renderFeed(); renderExplore(); renderProfile(); renderConversationList(); renderMessageUsers(); }));
+    state.unsubscribers.push(db.collection("posts").orderBy("createdAt", "desc").onSnapshot(s => { state.posts = s.docs.map(d => ({ id: d.id, ...d.data() })); renderFeed(); renderProfile(); }));
+    state.unsubscribers.push(db.collection("stories").orderBy("createdAt", "desc").limit(20).onSnapshot(s => { const cutoff = Date.now() - 24 * 60 * 60 * 1000; state.stories = s.docs.map(d => ({ id: d.id, ...d.data() })).filter(story => !dateFrom(story.createdAt) || dateFrom(story.createdAt).getTime() > cutoff); renderStories(); }));
   }
 
   function shutdownRealtimeData() {
-    state.unsubscribers.forEach((unsubscribe) => unsubscribe());
-    state.unsubscribers = [];
-    if (state.chatUnsubscribe) state.chatUnsubscribe();
-    if (state.commentUnsubscribe) state.commentUnsubscribe();
-    state.chatUnsubscribe = null;
-    state.commentUnsubscribe = null;
+    state.unsubscribers.forEach(u => u()); state.unsubscribers = [];
+    if (state.chatUnsubscribe) state.chatUnsubscribe(); if (state.commentUnsubscribe) state.commentUnsubscribe();
   }
 
-  $("auth-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    showAuthError("");
-    try { await auth.signInWithEmailAndPassword($("auth-email").value.trim(), $("auth-password").value); }
-    catch (error) { showAuthError(firebaseError(error, "Giriş yapılamadı.")); }
-  });
-  $("register-btn").addEventListener("click", async () => {
-    showAuthError("");
-    try { await auth.createUserWithEmailAndPassword($("auth-email").value.trim(), $("auth-password").value); }
-    catch (error) { showAuthError(firebaseError(error, "Hesap oluşturulamadı.")); }
-  });
+  $("auth-form").addEventListener("submit", async (e) => { e.preventDefault(); try { await auth.signInWithEmailAndPassword($("auth-email").value.trim(), $("auth-password").value); } catch (er) { showAuthError(firebaseError(er)); } });
+  $("register-btn").addEventListener("click", async () => { try { await auth.createUserWithEmailAndPassword($("auth-email").value.trim(), $("auth-password").value); } catch (er) { showAuthError(firebaseError(er)); } });
   $("logout-btn").addEventListener("click", () => auth.signOut());
   
-  $("theme-toggle").addEventListener("click", () => { 
-    document.body.classList.toggle("is-dark"); 
-    localStorage.setItem("swipper-theme", document.body.classList.contains("is-dark") ? "dark" : "light"); 
-    updateThemeButton(); 
-    triggerHaptic();
-  });
-  
-  document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
-  [$("open-composer"), $("open-composer-side"), $("mobile-compose"), $("bottom-compose")].forEach((button) => button.addEventListener("click", openComposer));
-  document.querySelectorAll(".open-composer-trigger").forEach((button) => button.addEventListener("click", openComposer));
-  $("refresh-feed").addEventListener("click", () => { 
-    renderFeed(); 
-    $("refresh-feed").querySelector("i").classList.add("fa-spin"); 
-    setTimeout(() => $("refresh-feed").querySelector("i").classList.remove("fa-spin"), 400);
-    showToast("Akış güncellendi", "fa-rotate-right");
-    triggerHaptic();
-  });
-  
+  document.querySelectorAll("[data-view]").forEach(btn => btn.addEventListener("click", () => showView(btn.dataset.view)));
+  [$("open-composer"), $("open-composer-side"), $("mobile-compose"), $("bottom-compose")].forEach(btn => btn.addEventListener("click", openComposer));
+  $("refresh-feed").addEventListener("click", () => { triggerHaptic(); renderFeed(); $("refresh-feed").querySelector("i").classList.add("fa-spin"); setTimeout(() => $("refresh-feed").querySelector("i").classList.remove("fa-spin"), 400); showToast("Akış güncellendi", "fa-rotate-right"); });
   $("user-search").addEventListener("input", renderExplore);
   $("clear-search").addEventListener("click", () => { $("user-search").value = ""; renderExplore(); $("user-search").focus(); });
-  document.querySelectorAll(".feed-tab").forEach((button) => button.addEventListener("click", () => { 
-    state.feed = button.dataset.feed; 
-    renderFeed(); 
-    triggerHaptic();
-  }));
+  document.querySelectorAll(".feed-tab").forEach(btn => btn.addEventListener("click", () => { triggerHaptic(); state.feed = btn.dataset.feed; renderFeed(); }));
   
   $("composer-form").addEventListener("submit", publishPost);
-  $("post-text").addEventListener("input", () => $("char-count").textContent = `${$("post-text").value.length}/1200`);
-  $("media-input").addEventListener("change", (event) => { const file = event.target.files[0]; if (!file) return; state.selectedMedia = file; previewMedia(file); });
-  $("story-input").addEventListener("change", async (event) => { await createStory(event.target.files[0]); event.target.value = ""; });
+  $("media-input").addEventListener("change", (e) => { 
+    const f = e.target.files[0]; 
+    if (!f) return; 
+    state.selectedMedia = f; 
+    const u = URL.createObjectURL(f); 
+    const p = $("media-preview"); 
+    p.innerHTML = `<img src="${u}" alt=""><button id="remove-media" type="button"><i class="fa-solid fa-xmark"></i></button>`; 
+    p.hidden = false; 
+    $("remove-media").onclick = () => { URL.revokeObjectURL(u); state.selectedMedia = null; $("media-input").value = ""; p.hidden = true; }; 
+  });
+  
+  $("story-input").addEventListener("change", async (e) => { 
+    const f = e.target.files[0]; 
+    if(!f) return; 
+    try{ 
+      const u = await uploadMedia(f, {textContent:""}); 
+      await db.collection("stories").add({ authorId: state.user.uid, imageUrl: u, createdAt: fieldValue.serverTimestamp() }); 
+      showToast("Hikaye eklendi", "fa-circle-check"); 
+      triggerHaptic("success"); 
+    } catch(er){ 
+      alert("Yüklenemedi."); 
+    } 
+    e.target.value = ""; 
+  });
+  
   $("comment-form").addEventListener("submit", sendComment);
   $("chat-form").addEventListener("submit", sendMessage);
   $("profile-form").addEventListener("submit", saveProfile);
   $("new-message").addEventListener("click", () => { renderMessageUsers(); openModal("new-message-modal"); });
   $("back-to-conversations").addEventListener("click", () => { $("chat-pane").closest(".messages-layout").classList.remove("is-chat-open"); triggerHaptic(); });
   $("chat-user-button").addEventListener("click", () => state.activeChatUserId && openUserProfile(state.activeChatUserId));
-  $("modal-layer").addEventListener("click", (event) => { if (event.target === $("modal-layer")) closeModals(); });
-  document.querySelectorAll(".close-modal").forEach((button) => button.addEventListener("click", closeModals));
+  $("modal-layer").addEventListener("click", (e) => { if (e.target === $("modal-layer")) closeModals(); });
+  document.querySelectorAll(".close-modal").forEach(btn => btn.addEventListener("click", closeModals));
 
-  document.addEventListener("click", (event) => {
-    // AĞ/BAĞLANTI LİSTESİ AÇMA TETİĞİ
-    const networkAction = event.target.closest("[data-network-action]");
-    if (networkAction) {
-      openNetworkModal(networkAction.dataset.networkAction, networkAction.dataset.networkUid);
+  document.addEventListener("click", (e) => {
+    const netAction = e.target.closest("[data-network-action]"); if (netAction) return openNetworkModal(netAction.dataset.networkAction, netAction.dataset.networkUid);
+    const uBtn = e.target.closest("[data-user-id]"); if (uBtn) return openUserProfile(uBtn.dataset.userId);
+    const fBtn = e.target.closest("[data-follow-id]"); if (fBtn) return toggleFollow(fBtn.dataset.followId);
+    const mBtn = e.target.closest("[data-message-id]"); if (mBtn) return state.sharePostId ? sharePostTo(mBtn.dataset.messageId) : openChat(mBtn.dataset.messageId);
+    const pBtn = e.target.closest("[data-post-action]");
+    if (pBtn) {
+      const id = pBtn.closest("[data-post-id]")?.dataset.postId; if (!id) return;
+      if (pBtn.dataset.postAction === "like") likePost(id);
+      if (pBtn.dataset.postAction === "comments") openComments(id);
+      if (pBtn.dataset.postAction === "delete") deletePost(id);
+      if (pBtn.dataset.postAction === "share") { state.sharePostId = id; renderMessageUsers(); openModal("new-message-modal"); }
       return;
     }
-
-    const userButton = event.target.closest("[data-user-id]");
-    if (userButton) { openUserProfile(userButton.dataset.userId); return; }
-    
-    const followButton = event.target.closest("[data-follow-id]");
-    if (followButton) { toggleFollow(followButton.dataset.followId); return; }
-    
-    const messageButton = event.target.closest("[data-message-id]");
-    if (messageButton) { state.sharePostId ? sharePostTo(messageButton.dataset.messageId) : openChat(messageButton.dataset.messageId); return; }
-    
-    const postButton = event.target.closest("[data-post-action]");
-    if (postButton) {
-      const id = postButton.closest("[data-post-id]")?.dataset.postId;
-      if (!id) return;
-      if (postButton.dataset.postAction === "like") likePost(id);
-      if (postButton.dataset.postAction === "comments") openComments(id);
-      if (postButton.dataset.postAction === "delete") deletePost(id);
-      if (postButton.dataset.postAction === "share") { state.sharePostId = id; renderMessageUsers(); openModal("new-message-modal"); }
-      return;
-    }
-    
-    const openPost = event.target.closest("[data-open-post]");
-    if (openPost) { openPostDetail(openPost.dataset.openPost); return; }
-    
-    const storyButton = event.target.closest("[data-story-id]");
-    if (storyButton) { openStory(storyButton.dataset.storyId); return; }
-    
-    if (event.target.closest("[data-story-action='add']")) { $("story-input").click(); return; }
-    if (event.target.closest("#edit-profile")) { openProfileEditor(); return; }
-    if (event.target.closest("#profile-share")) { closeModals(); openComposer(); }
+    const oBtn = e.target.closest("[data-open-post]"); if (oBtn) return openPostDetail(oBtn.dataset.openPost);
+    const sBtn = e.target.closest("[data-story-id]"); if (sBtn) return openStory(sBtn.dataset.storyId);
+    if (e.target.closest("[data-story-action='add']")) return $("story-input").click();
+    if (e.target.closest("#edit-profile")) return openProfileEditor();
   });
 
   restoreTheme();
   auth.onAuthStateChanged(async (user) => {
-    if (!user) {
-      shutdownRealtimeData();
-      state.user = null; state.users = {}; state.posts = []; state.stories = [];
-      $("app-shell").hidden = true;
-      $("auth-screen").hidden = false;
-      setSplashGone();
-      return;
-    }
+    if (!user) { shutdownRealtimeData(); state.user = null; $("app-shell").hidden = true; $("auth-screen").hidden = false; setSplashGone(); return; }
     state.user = user;
     try {
-      await ensureProfile(user);
-      $("auth-screen").hidden = true;
-      $("app-shell").hidden = false;
-      setSplashGone();
-      startRealtimeData();
-      showView("home");
-    } catch (error) { showAuthError(firebaseError(error, "Hesap hazırlanamadı.")); $("auth-screen").hidden = false; setSplashGone(); }
+      await db.collection("users").doc(user.uid).get().then(d => { if (!d.exists) return db.collection("users").doc(user.uid).set({ name: user.email?.split("@")[0] || "yeniüye", username: cleanHandle(user.email?.split("@")[0]).slice(0,20), bio: "Swipper'a katıldı ✦", following: [], followers: [] }); });
+      $("auth-screen").hidden = true; $("app-shell").hidden = false; setSplashGone(); startRealtimeData(); showView("home"); showToast("Hoş geldin!", "fa-hand-sparkles");
+    } catch (er) { showAuthError(firebaseError(er)); $("auth-screen").hidden = false; setSplashGone(); }
   });
 });
