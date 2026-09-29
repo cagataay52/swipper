@@ -32,6 +32,9 @@ document.addEventListener("DOMContentLoaded", () => {
     postListenerStarted: false
   };
 
+  // SİSTEM TEMASINI ALGILAMA VE DİNLEME (YENİ EKLENDİ)
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
+
   // Mobil tarayıcılarda çift dokunuşla oluşan sayfa yakınlaştırmasını engeller.
   let lastTouchEnd = 0;
   document.addEventListener("touchend", (event) => {
@@ -117,10 +120,25 @@ document.addEventListener("DOMContentLoaded", () => {
     $("theme-toggle").querySelector("span").textContent = dark ? "Açık tema" : "Tema";
   }
 
+  // GELİŞMİŞ SİSTEM DESTEKLİ DARK MODE (YENİ EKLENDİ)
   function restoreTheme() {
-    if (localStorage.getItem("swipper-theme") === "dark") document.body.classList.add("is-dark");
+    const saved = localStorage.getItem("swipper-theme");
+    // Kullanıcı önceden seçmişse onu, seçmemişse sistem temasını kullan
+    if (saved === "dark" || (!saved && prefersDark.matches)) {
+      document.body.classList.add("is-dark");
+    } else {
+      document.body.classList.remove("is-dark");
+    }
     updateThemeButton();
   }
+
+  // Kullanıcı telefonun/bilgisayarın temasını değiştirirse Swipper da anında değişsin
+  prefersDark.addEventListener("change", (e) => {
+    if (!localStorage.getItem("swipper-theme")) {
+      document.body.classList.toggle("is-dark", e.matches);
+      updateThemeButton();
+    }
+  });
 
   function setProfileSurfaces() {
     const profile = currentProfile();
@@ -225,6 +243,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function userPosts(uid) { return state.posts.filter((post) => post.authorId === uid); }
 
+  // TIKLANABİLİR TAKİP İSTATİSTİKLERİ EKLENDİ (YENİ EKLENDİ)
   function profileMarkup(profile, uid, isOwn) {
     const posts = userPosts(uid);
     const following = Array.isArray(currentProfile().following) ? currentProfile().following : [];
@@ -234,10 +253,19 @@ document.addEventListener("DOMContentLoaded", () => {
       if (media) return `<button class="profile-grid-item" type="button" data-open-post="${escapeHTML(post.id)}">${isVideo(post) ? `<video src="${escapeHTML(media)}" muted preload="metadata"></video>` : `<img src="${escapeHTML(media)}" alt="">`}</button>`;
       return `<button class="profile-grid-item profile-text-post" type="button" data-open-post="${escapeHTML(post.id)}">${escapeHTML(postText(post).slice(0, 70) || "Not")}</button>`;
     }).join("") : `<div class="empty-state"><span class="empty-icon"><i class="fa-regular fa-image"></i></span><h3>Henüz paylaşım yok</h3><p>${isOwn ? "İlk anını paylaş ve profilini canlandır." : "Bu profil henüz bir şey paylaşmadı."}</p></div>`;
+    
     return `<div class="profile-hero"><div class="profile-hero-top"><img class="profile-avatar" src="${escapeHTML(avatarFor(profile))}" alt="${escapeHTML(profile.name || profile.username || "Profil")}"><div class="profile-head-copy"><h2>${escapeHTML(profile.name || profile.username || "Swipper üyesi")}</h2><span>@${escapeHTML(profile.username || "uye")}</span></div></div>
       <p class="profile-bio">${escapeHTML(profile.bio || "Swipper'da yeni fikirler keşfediyor.")}</p>
       <div class="profile-actions">${isOwn ? `<button id="edit-profile" class="button button--soft" type="button"><i class="fa-regular fa-pen-to-square"></i>Profili düzenle</button><button id="profile-share" class="button button--primary" type="button"><i class="fa-solid fa-plus"></i>Paylaş</button>` : `<button class="button ${isFollowing ? "button--soft" : "button--primary"}" type="button" data-follow-id="${escapeHTML(uid)}">${isFollowing ? "Takipte" : "Takip et"}</button><button class="button button--soft" type="button" data-message-id="${escapeHTML(uid)}"><i class="fa-regular fa-paper-plane"></i>Mesaj</button>`}</div>
-      <div class="profile-stats"><span class="profile-stat"><b>${posts.length}</b><span>Paylaşım</span></span><span class="profile-stat"><b>${Array.isArray(profile.followers) ? profile.followers.length : 0}</b><span>Takipçi</span></span><span class="profile-stat"><b>${Array.isArray(profile.following) ? profile.following.length : 0}</b><span>Takip</span></span></div></div>
+      <div class="profile-stats">
+        <span class="profile-stat"><b>${posts.length}</b><span>Paylaşım</span></span>
+        <button class="profile-stat profile-stat--click" type="button" data-network-action="followers" data-network-uid="${escapeHTML(uid)}">
+          <b>${Array.isArray(profile.followers) ? profile.followers.length : 0}</b><span>Takipçi</span>
+        </button>
+        <button class="profile-stat profile-stat--click" type="button" data-network-action="following" data-network-uid="${escapeHTML(uid)}">
+          <b>${Array.isArray(profile.following) ? profile.following.length : 0}</b><span>Takip</span>
+        </button>
+      </div></div>
       <div class="profile-section-heading"><h3>Paylaşımlar</h3><span>${posts.length} içerik</span></div><div class="profile-grid">${grid}</div>`;
   }
 
@@ -251,6 +279,42 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!profile) return;
     $("user-modal-content").innerHTML = `<div class="user-profile">${profileMarkup(profile, uid, uid === state.user?.uid)}</div>`;
     openModal("user-modal");
+  }
+
+  // KİŞİ AĞINI (TAKİPÇİ/TAKİP) AÇAN YENİ FONKSİYON (YENİ EKLENDİ)
+  function openNetworkModal(type, uid) {
+    const profile = state.users[uid];
+    if (!profile) return;
+    
+    // type parametresine göre takipçi veya takip edilenler listesini al
+    const list = type === "followers" ? profile.followers : profile.following;
+    const uids = Array.isArray(list) ? list : [];
+    
+    $("network-modal-type").textContent = type === "followers" ? "AĞ BAĞLANTILARI" : "TAKİP ETTİKLERİ";
+    $("network-modal-title").textContent = type === "followers" ? "Takipçiler" : "Takip Edilenler";
+    
+    const myFollowing = Array.isArray(currentProfile().following) ? currentProfile().following : [];
+    
+    $("network-list").innerHTML = uids.length ? uids.map(id => {
+      const person = state.users[id];
+      if (!person) return "";
+      const isFollowing = myFollowing.includes(id);
+      const isMe = id === state.user?.uid;
+      
+      return `
+      <div class="network-item">
+        <button type="button" class="network-item-info" data-user-id="${escapeHTML(id)}">
+          <img src="${escapeHTML(avatarFor(person))}" alt="">
+          <div>
+            <b>${escapeHTML(person.name || person.username)}</b>
+            <span>@${escapeHTML(person.username)}</span>
+          </div>
+        </button>
+        ${!isMe ? `<button class="button ${isFollowing ? "button--soft" : "button--primary"}" type="button" data-follow-id="${escapeHTML(id)}">${isFollowing ? "Takipte" : "Takip et"}</button>` : ""}
+      </div>`;
+    }).join("") : `<div class="empty-state"><span class="empty-icon"><i class="fa-solid fa-user-group"></i></span><h3>Burada henüz kimse yok</h3><p>Bağlantılar yakında burada görünür.</p></div>`;
+    
+    openModal("network-modal");
   }
 
   function openPostDetail(id) {
@@ -308,6 +372,16 @@ document.addEventListener("DOMContentLoaded", () => {
         db.collection("users").doc(state.user.uid).update({ following: followed ? fieldValue.arrayRemove(uid) : fieldValue.arrayUnion(uid) }),
         db.collection("users").doc(uid).update({ followers: followed ? fieldValue.arrayRemove(state.user.uid) : fieldValue.arrayUnion(state.user.uid) })
       ]);
+      // Eğer modal açıksa, listeyi yenile
+      if (!$("network-modal").hidden) {
+        const type = $("network-modal-title").textContent === "Takipçiler" ? "followers" : "following";
+        // Kullanıcının profili görüntüleniyorsa (data-network-uid kontrolü yapmıyoruz, doğrudan açıldığı ID üzerinden güncellenir)
+        // Kullanıcı kendi profilindeyse güncellemeyi doğrudan yansıtmak için:
+        setTimeout(() => {
+            const currentModalUid = $("user-modal").hidden ? state.user.uid : uid;
+            openNetworkModal(type, currentModalUid);
+        }, 100); 
+      }
     } catch (error) { alert(firebaseError(error, "Takip işlemi gerçekleştirilemedi.")); }
   }
 
@@ -539,7 +613,14 @@ document.addEventListener("DOMContentLoaded", () => {
     catch (error) { showAuthError(firebaseError(error, "Hesap oluşturulamadı.")); }
   });
   $("logout-btn").addEventListener("click", () => auth.signOut());
-  $("theme-toggle").addEventListener("click", () => { document.body.classList.toggle("is-dark"); localStorage.setItem("swipper-theme", document.body.classList.contains("is-dark") ? "dark" : "light"); updateThemeButton(); });
+  
+  // TEMA DEĞİŞTİRİLDİĞİNDE ARTIK LOCALSTORAGE'A KAYDEDİLECEK (YENİ EKLENDİ)
+  $("theme-toggle").addEventListener("click", () => { 
+    document.body.classList.toggle("is-dark"); 
+    localStorage.setItem("swipper-theme", document.body.classList.contains("is-dark") ? "dark" : "light"); 
+    updateThemeButton(); 
+  });
+  
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
   [$("open-composer"), $("open-composer-side"), $("mobile-compose"), $("bottom-compose")].forEach((button) => button.addEventListener("click", openComposer));
   document.querySelectorAll(".open-composer-trigger").forEach((button) => button.addEventListener("click", openComposer));
@@ -561,6 +642,13 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".close-modal").forEach((button) => button.addEventListener("click", closeModals));
 
   document.addEventListener("click", (event) => {
+    // AĞ/BAĞLANTI LİSTESİ AÇMA TETİĞİ (YENİ EKLENDİ)
+    const networkAction = event.target.closest("[data-network-action]");
+    if (networkAction) {
+      openNetworkModal(networkAction.dataset.networkAction, networkAction.dataset.networkUid);
+      return;
+    }
+
     const userButton = event.target.closest("[data-user-id]");
     if (userButton) { openUserProfile(userButton.dataset.userId); return; }
     const followButton = event.target.closest("[data-follow-id]");
@@ -607,4 +695,3 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) { showAuthError(firebaseError(error, "Hesap hazırlanamadı.")); $("auth-screen").hidden = false; setSplashGone(); }
   });
 });
-

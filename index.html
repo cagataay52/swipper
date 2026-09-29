@@ -109,6 +109,18 @@
     <section id="story-modal" class="modal modal--story" role="dialog" aria-modal="true" aria-label="Hikaye" hidden><button class="icon-button close-modal story-close" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button><div id="story-content"></div></section>
 
     <section id="new-message-modal" class="modal modal--new-message" role="dialog" aria-modal="true" aria-labelledby="new-message-title" hidden><header class="modal-header"><div><span class="eyebrow">SOHBET BAŞLAT</span><h2 id="new-message-title">Kime yazalım?</h2></div><button class="icon-button close-modal" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></header><div id="message-user-list" class="message-user-list"></div></section>
+
+    <!-- TAKİPÇİLER VE TAKİP EDİLENLER MODALI YENİ EKLENDİ -->
+    <section id="network-modal" class="modal modal--network" role="dialog" aria-modal="true" aria-labelledby="network-modal-title" hidden>
+      <header class="modal-header">
+        <div>
+          <span id="network-modal-type" class="eyebrow">BAĞLANTILAR</span>
+          <h2 id="network-modal-title">Kişiler</h2>
+        </div>
+        <button class="icon-button close-modal" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button>
+      </header>
+      <div id="network-list" class="network-list"></div>
+    </section>
   </div>
 
   <input id="story-input" type="file" accept="image/*" hidden>
@@ -118,4 +130,3 @@
   <script src="app.js"></script>
 </body>
 </html>
-
