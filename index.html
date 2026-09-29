@@ -2,8 +2,8 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta name="theme-color" content="#6d5dfc">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff" id="theme-color-meta">
   <meta name="description" content="Swipper — fotoğrafların, fikirlerin ve insanların buluştuğu sosyal alan.">
   <title>Swipper — paylaş, keşfet, bağlan</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,6 +16,9 @@
   <div id="splash-screen" class="splash-screen" aria-hidden="true">
     <div class="brand brand--splash"><span class="brand-mark"><i class="fa-solid fa-sparkles"></i></span>swipper</div>
   </div>
+
+  <!-- UYGULAMA İÇİ BİLDİRİMLER (TOAST) -->
+  <div id="toast-container" class="toast-container"></div>
 
   <section id="auth-screen" class="auth-screen" aria-label="Giriş">
     <div class="auth-art" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span></div>
@@ -110,7 +113,6 @@
 
     <section id="new-message-modal" class="modal modal--new-message" role="dialog" aria-modal="true" aria-labelledby="new-message-title" hidden><header class="modal-header"><div><span class="eyebrow">SOHBET BAŞLAT</span><h2 id="new-message-title">Kime yazalım?</h2></div><button class="icon-button close-modal" type="button" aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button></header><div id="message-user-list" class="message-user-list"></div></section>
 
-    <!-- TAKİPÇİLER VE TAKİP EDİLENLER MODALI YENİ EKLENDİ -->
     <section id="network-modal" class="modal modal--network" role="dialog" aria-modal="true" aria-labelledby="network-modal-title" hidden>
       <header class="modal-header">
         <div>
